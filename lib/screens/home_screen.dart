@@ -1,12 +1,12 @@
+import 'package:alo_draft_app/screens/contact_screen.dart';
+import 'package:alo_draft_app/screens/message_screen.dart';
+import 'package:alo_draft_app/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_event.dart';
-import 'package:alo_draft_app/blocs/todo/todo_bloc.dart';
-import 'package:alo_draft_app/blocs/todo/todo_event.dart';
-import 'package:alo_draft_app/blocs/todo/todo_state.dart';
-import 'package:alo_draft_app/widgets/todo_item.dart';
-import 'package:alo_draft_app/screens/add_edit_todo_screen.dart';
+import 'package:alo_draft_app/screens/todo_screen.dart';
+import 'package:alo_draft_app/screens/analytics_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,17 +16,29 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    context.read<TodoBloc>().add(TodosLoaded());
-  }
+  int _currentIndex = 0;
+
+  final List<Widget> _screens = [
+    const TodoScreen(),
+    const ContactListScreen(),
+    const AnalyticsScreen(),
+    const MessagesScreen(),
+    const SettingsScreen(),
+  ];
+
+  final List<String> _titles = [
+    'Todo',
+    'Contacts',
+    'Analytics',
+    'Messages',
+    'Settings',
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Todo List'),
+        title: Text(_titles[_currentIndex]),
         actions: [
           IconButton(
             icon: const Icon(Icons.exit_to_app),
@@ -36,65 +48,42 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: BlocBuilder<TodoBloc, TodoState>(
-        builder: (context, state) {
-          if (state is TodoLoading) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          }
-          if (state is TodoLoaded) {
-            if (state.todos.isEmpty) {
-              return const Center(
-                child: Text('No todos yet. Add one to get started!'),
-              );
-            }
-            return ListView.builder(
-              itemCount: state.todos.length,
-              itemBuilder: (context, index) {
-                final todo = state.todos[index];
-                return TodoItem(
-                  todo: todo,
-                  onEdit: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => AddEditTodoScreen(todo: todo),
-                      ),
-                    );
-                  },
-                  onDelete: () {
-                    context.read<TodoBloc>().add(TodoDeleted(todo.id));
-                  },
-                  onToggle: (value) {
-                    context.read<TodoBloc>().add(
-                          TodoUpdated(
-                            todo.copyWith(isCompleted: value),
-                          ),
-                        );
-                  },
-                );
-              },
-            );
-          }
-          if (state is TodoFailure) {
-            return Center(
-              child: Text('Error: ${state.error}'),
-            );
-          }
-          return const Center(
-            child: Text('No todos found'),
-          );
-        },
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const AddEditTodoScreen(),
-            ),
-          );
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
         },
-        child: const Icon(Icons.add),
+        selectedItemColor: Theme.of(context).primaryColor,
+        unselectedItemColor: Colors.grey,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.check_box),
+            label: 'Todo',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.contacts),
+            label: 'Contacts',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.analytics),
+            label: 'Analytics',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.message),
+            label: 'Messages',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
       ),
     );
   }

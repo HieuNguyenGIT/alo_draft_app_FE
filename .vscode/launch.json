@@ -2,22 +2,40 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug Mode",
+            "name": "Local Device",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "debug"
+            "program": "lib/main.dart",
+            "args": ["--flavor", "local"],
+            "toolArgs": ["-d", "R58N857WVDE"],
+            "noDebug": true
         },
         {
-            "name": "Profile Mode",
+            "name": "Staging Device",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "profile"
+            "program": "lib/main.dart",
+            "args": ["--flavor", "staging"],
+            "toolArgs": ["-d", "R58N857WVDE"],
+            "noDebug": true
         },
         {
-            "name": "Release Mode",
+            "name": "Production Device",
             "request": "launch",
             "type": "dart",
-            "flutterMode": "release"
+            "program": "lib/main.dart",
+            "args": ["--flavor", "production"],
+            "toolArgs": ["-d", "R58N857WVDE"],
+            "noDebug": true
+        },
+        {
+            "name": "QA Production Device",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart",
+            "args": ["--flavor", "qaproduction"],
+            "toolArgs": ["-d", "R58N857WVDE"],
+            "noDebug": true
         }
     ]
 }

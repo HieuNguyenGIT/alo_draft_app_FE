@@ -1,3 +1,4 @@
+//settings.gradle
 pluginManagement {
     def flutterSdkPath = {
         def properties = new Properties()

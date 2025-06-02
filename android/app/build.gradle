@@ -1,3 +1,5 @@
+//build.gradle
+
 plugins {
     id "com.android.application"
     id "kotlin-android"
@@ -32,7 +34,7 @@ android {
     
     // Configure product flavors
     productFlavors {
-        development {
+        local {
             dimension "environment"
             applicationIdSuffix ".dev"
             versionNameSuffix "-dev"
@@ -45,6 +47,10 @@ android {
         }
         
         production {
+            dimension "environment"
+        }
+
+        qaproduction {
             dimension "environment"
         }
     }
