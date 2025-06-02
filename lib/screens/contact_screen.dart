@@ -1,12 +1,8 @@
-// Add to pubspec.yaml:
-// dependencies:
-//   url_launcher: ^6.2.2
-
 import 'package:alo_draft_app/util/color.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:url_launcher/url_launcher.dart'; // Add this import
+import 'package:url_launcher/url_launcher.dart';
 import 'package:alo_draft_app/blocs/contact/contact_bloc.dart';
 import 'package:alo_draft_app/blocs/contact/contact_event.dart';
 import 'package:alo_draft_app/blocs/contact/contact_state.dart';
