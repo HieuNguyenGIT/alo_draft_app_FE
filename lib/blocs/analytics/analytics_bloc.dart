@@ -15,41 +15,43 @@ class AnalyticsBloc extends Bloc<AnalyticsEvent, AnalyticsState> {
     try {
       // Simulate API call
       await Future.delayed(const Duration(seconds: 1));
+
+      // Calculate totals from the last 7 days mock data
       final data = [
         AnalyticsData(
-          title: 'Total Tasks',
-          value: '42',
-          icon: Icons.task_alt,
-          color: Colors.blue,
-        ),
-        AnalyticsData(
-          title: 'Completed',
-          value: '28',
-          icon: Icons.check_circle,
-          color: Colors.green,
-        ),
-        AnalyticsData(
-          title: 'Pending',
-          value: '14',
-          icon: Icons.pending,
+          title: 'Tổng truy cập',
+          value: '612',
+          icon: Icons.visibility,
           color: Colors.orange,
         ),
         AnalyticsData(
-          title: 'Contacts',
-          value: '156',
-          icon: Icons.people,
+          title: 'Liên hệ',
+          value: '120',
+          icon: Icons.contact_phone,
+          color: Colors.blue,
+        ),
+        AnalyticsData(
+          title: 'Popup đăng ký',
+          value: '47',
+          icon: Icons.people_outline,
+          color: Colors.green,
+        ),
+        AnalyticsData(
+          title: 'Người dùng mới',
+          value: '89',
+          icon: Icons.person_add,
           color: Colors.purple,
         ),
         AnalyticsData(
-          title: 'Messages',
-          value: '89',
-          icon: Icons.message,
+          title: 'Tỷ lệ chuyển đổi',
+          value: '19.6%',
+          icon: Icons.trending_up,
           color: Colors.teal,
         ),
         AnalyticsData(
-          title: 'This Week',
-          value: '+12%',
-          icon: Icons.trending_up,
+          title: 'Thời gian trung bình',
+          value: '2:34',
+          icon: Icons.access_time,
           color: Colors.red,
         ),
       ];

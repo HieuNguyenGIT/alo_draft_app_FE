@@ -1,4 +1,5 @@
 import 'package:alo_draft_app/util/color.dart';
+import 'package:alo_draft_app/util/custom_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -54,15 +55,15 @@ class _ContactListScreenState extends State<ContactListScreen>
   }
 
   Future<void> _makePhoneCall(String phoneNumber) async {
-    print('Starting phone call for: $phoneNumber'); // Debug log
+    AppLogger.log('Starting phone call for: $phoneNumber'); // Debug log
 
     try {
       final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
-      print('Created URI: $phoneUri'); // Debug log
+      AppLogger.log('Created URI: $phoneUri'); // Debug log
 
       // Check if tel: scheme is supported
       bool canLaunch = await canLaunchUrl(phoneUri);
-      print('Can launch tel URI: $canLaunch'); // Debug log
+      AppLogger.log('Can launch tel URI: $canLaunch'); // Debug log
 
       if (canLaunch) {
         // Try with external application mode (forces opening in phone app)
@@ -71,7 +72,7 @@ class _ContactListScreenState extends State<ContactListScreen>
           mode: LaunchMode.externalApplication,
         );
 
-        print('Launch successful: $launched'); // Debug log
+        AppLogger.log('Launch successful: $launched'); // Debug log
 
         if (launched && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +85,7 @@ class _ContactListScreenState extends State<ContactListScreen>
         }
       } else {
         // Try alternative approach for devices that don't support canLaunchUrl properly
-        print('Trying alternative launch method...'); // Debug log
+        AppLogger.log('Trying alternative launch method...'); // Debug log
 
         await launchUrl(
           phoneUri,
@@ -102,8 +103,8 @@ class _ContactListScreenState extends State<ContactListScreen>
         }
       }
     } catch (e) {
-      print('Phone launch error: $e'); // Debug log
-      print('Error type: ${e.runtimeType}'); // Debug log
+      AppLogger.log('Phone launch error: $e'); // Debug log
+      AppLogger.log('Error type: ${e.runtimeType}'); // Debug log
 
       // Enhanced fallback with device-specific instructions
       await Clipboard.setData(ClipboardData(text: phoneNumber));
@@ -136,7 +137,7 @@ class _ContactListScreenState extends State<ContactListScreen>
                 try {
                   await launchUrl(Uri.parse('tel:$phoneNumber'));
                 } catch (e) {
-                  print('Retry failed: $e');
+                  AppLogger.log('Retry failed: $e');
                 }
               },
             ),
@@ -333,23 +334,28 @@ class _ContactListScreenState extends State<ContactListScreen>
                           animation: slideAnimation,
                           builder: (context, child) {
                             if (slideAnimation.value > 20) {
-                              final screenWidth =
-                                  MediaQuery.of(context).size.width;
                               return Positioned(
                                 left: 0,
                                 top: 0,
                                 bottom: 0,
-                                width: screenWidth / 2, // Half screen width
+                                width: slideAnimation.value,
                                 child: GestureDetector(
                                   onTap: () async {
-                                    print(
+                                    AppLogger.log(
                                         'Call button tapped for ${contact.phoneNumber}');
                                     await _makePhoneCall(contact.phoneNumber);
                                     animationController.reverse();
                                   },
                                   child: Container(
                                     color: Colors.transparent,
-                                    child: const SizedBox.expand(),
+                                    child: const Center(
+                                      // Add this
+                                      child: Icon(
+                                        Icons.phone,
+                                        color: AppColors.callIcon,
+                                        size: 24,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               );
