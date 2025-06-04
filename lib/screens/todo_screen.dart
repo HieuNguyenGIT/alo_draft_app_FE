@@ -74,6 +74,7 @@ class _TodoScreenState extends State<TodoScreen> {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: "todo_fab",
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(

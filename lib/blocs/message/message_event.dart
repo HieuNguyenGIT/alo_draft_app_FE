@@ -1,3 +1,5 @@
 abstract class MessageEvent {}
 
-class MessagesLoaded extends MessageEvent {}
+class ConversationsLoaded extends MessageEvent {}
+
+class ConversationRefreshed extends MessageEvent {}

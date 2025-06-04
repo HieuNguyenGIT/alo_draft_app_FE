@@ -204,21 +204,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   // New tappable legend item widget
+
   Widget _buildTappableLegendItem(
       String label, Color color, bool isVisible, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              isVisible ? color.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isVisible ? color : Colors.grey,
-            width: 1.5,
-          ),
-        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -330,14 +322,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           horizontalInterval: 25,
           checkToShowHorizontalLine: (value) => value % 25 == 0,
           getDrawingHorizontalLine: (value) => FlLine(
-            color: Colors.grey.withOpacity(0.3),
+            color: Colors.grey.withValues(alpha: 0.3),
             strokeWidth: 1,
           ),
           drawVerticalLine: false,
         ),
         borderData: FlBorderData(
           show: true,
-          border: Border.all(color: Colors.grey.withOpacity(0.3)),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
         ),
         barGroups: _getBarGroupsData(),
       ),
@@ -450,7 +442,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             horizontalInterval: 10,
             checkToShowHorizontalLine: (value) => value % 10 == 0,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: Colors.grey.withOpacity(0.3),
+              color: Colors.grey.withValues(alpha: 0.3),
               strokeWidth: 1,
             ),
             drawVerticalLine: false,
@@ -458,7 +450,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           titlesData: _getLineChartTitles(),
           borderData: FlBorderData(
             show: true,
-            border: Border.all(color: Colors.grey.withOpacity(0.3)),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
           ),
           lineBarsData: [
             LineChartBarData(
@@ -531,14 +523,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             horizontalInterval: 5,
             checkToShowHorizontalLine: (value) => value % 5 == 0,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: Colors.grey.withOpacity(0.3),
+              color: Colors.grey.withValues(alpha: 0.3),
               strokeWidth: 1,
             ),
             drawVerticalLine: false,
           ),
           borderData: FlBorderData(
             show: true,
-            border: Border.all(color: Colors.grey.withOpacity(0.3)),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
           ),
           barGroups: _getContactBarData(),
         ),
@@ -550,7 +542,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       return Container(
         height: 300,
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.withOpacity(0.3)),
+          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: const Center(
@@ -565,35 +557,67 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       );
     }
 
-    // Combined chart (default) - Line chart with bar chart overlay
+    // 🔥 NEW: Hybrid chart - BarChart base with LineChart overlay (with perfect alignment)
     return Stack(
       children: [
-        // Line chart background
-        if (_showLuotTruyCap)
-          LineChart(
-            LineChartData(
-              minX: 0,
-              maxX: 6,
-              minY: 0,
+        // Base BarChart for contacts (blue bars)
+        if (_showLuotLienHe)
+          BarChart(
+            BarChartData(
+              alignment: BarChartAlignment.spaceAround,
               maxY: 110,
+              minY: 0,
+              groupsSpace: 20, // Key: This controls bar positioning
+              barTouchData: BarTouchData(
+                enabled: true,
+                touchTooltipData: BarTouchTooltipData(
+                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                    return BarTooltipItem(
+                      'Day ${16 + groupIndex}\nLiên hệ: ${rod.toY.round()}',
+                      const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              titlesData: _getLineChartTitles(),
               gridData: FlGridData(
                 show: true,
                 horizontalInterval: 20,
                 checkToShowHorizontalLine: (value) => value % 20 == 0,
                 getDrawingHorizontalLine: (value) => FlLine(
-                  color: Colors.grey.withOpacity(0.3),
+                  color: Colors.grey.withValues(alpha: 0.3),
                   strokeWidth: 1,
                 ),
                 drawVerticalLine: false,
               ),
-              titlesData: _getLineChartTitles(),
               borderData: FlBorderData(
                 show: true,
-                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
               ),
+              barGroups: _getContactBarData(),
+            ),
+          ),
+
+        // Overlay LineChart for access (orange line) - with matching positioning
+        if (_showLuotTruyCap)
+          LineChart(
+            LineChartData(
+              minX: -1.5, // KEY: Adjust to match bar positioning
+              maxX: 6.5, // KEY: Adjust to match bar positioning
+              minY: 0,
+              maxY: 110,
+              gridData:
+                  const FlGridData(show: false), // Don't show grid on overlay
+              titlesData: const FlTitlesData(
+                  show: false), // Don't show titles on overlay
+              borderData:
+                  FlBorderData(show: false), // Don't show border on overlay
               lineBarsData: [
                 LineChartBarData(
-                  spots: _getAccessLineData(),
+                  spots: _getAccessLineDataAligned(), // 🔥 NEW: Aligned spots
                   isCurved: true,
                   curveSmoothness: 0.3,
                   color: Colors.orange,
@@ -613,35 +637,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   belowBarData: BarAreaData(show: false),
                 ),
               ],
-              lineTouchData: LineTouchData(enabled: false),
-            ),
-          ),
-        // Bar chart overlay for contacts
-        if (_showLuotLienHe)
-          BarChart(
-            BarChartData(
-              alignment: BarChartAlignment.spaceAround,
-              maxY: 110,
-              minY: 0,
-              groupsSpace: 20,
-              barTouchData: BarTouchData(
+              lineTouchData: LineTouchData(
                 enabled: true,
-                touchTooltipData: BarTouchTooltipData(
-                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                    return BarTooltipItem(
-                      'Day ${16 + groupIndex}\nLiên hệ: ${rod.toY.round()}',
-                      const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipItems: (touchedSpots) {
+                    return touchedSpots.map((touchedSpot) {
+                      return LineTooltipItem(
+                        'Truy cập: ${touchedSpot.y.toInt()}',
+                        const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }).toList();
                   },
                 ),
+                handleBuiltInTouches: true,
               ),
-              titlesData: const FlTitlesData(show: false),
-              gridData: const FlGridData(show: false),
-              borderData: FlBorderData(show: false),
-              barGroups: _getContactBarData(),
             ),
           ),
       ],
@@ -712,7 +724,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         barRods: [
           BarChartRodData(
             toY: value,
-            color: Colors.blue.withOpacity(0.8),
+            color: Colors.blue.withValues(alpha: 0.3),
             width: 14,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(4),
@@ -720,7 +732,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
           ),
         ],
-        barsSpace: 4,
       );
     }).toList();
   }
@@ -735,6 +746,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       FlSpot(4, 95),
       FlSpot(5, 84),
       FlSpot(6, 90),
+    ];
+  }
+
+  // 🔥 NEW: Aligned line data for hybrid chart
+  List<FlSpot> _getAccessLineDataAligned() {
+    // Adjusted x-values to align with BarChart positioning
+    // BarChart with spaceAround alignment centers bars at these x positions
+    return const [
+      FlSpot(0.0, 88), // Aligns with first bar
+      FlSpot(1.0, 82), // Aligns with second bar
+      FlSpot(2.0, 100), // Aligns with third bar
+      FlSpot(3.0, 98), // Aligns with fourth bar
+      FlSpot(4.0, 95), // Aligns with fifth bar
+      FlSpot(5.0, 84), // Aligns with sixth bar
+      FlSpot(6.0, 90), // Aligns with seventh bar
     ];
   }
 }
