@@ -13,6 +13,7 @@ class WebSocketService {
   StreamController<Map<String, dynamic>>? _typingController;
   bool _isConnected = false;
   Timer? _typingTimer;
+  int? _currentConversationId; // Track current conversation
 
   static WebSocketService get instance {
     _instance ??= WebSocketService._internal();
@@ -39,12 +40,16 @@ class WebSocketService {
     if (_isConnected) return;
 
     try {
-      // Get the WebSocket URL (replace http with ws)
+      // Use the corrected WebSocket URL from constants
       final wsUrl = baseUrl.replaceFirst('http', 'ws').replaceFirst('/api', '');
 
       AppLogger.log('Connecting to WebSocket: $wsUrl');
 
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+
+      // Wait for connection to be established
+      await Future.delayed(const Duration(milliseconds: 500));
+
       _isConnected = true;
 
       // Authenticate immediately after connection
@@ -54,11 +59,13 @@ class WebSocketService {
           'type': 'authenticate',
           'token': token,
         });
+        AppLogger.log('Authentication message sent');
       }
 
       // Listen to messages
       _channel!.stream.listen(
         (data) {
+          AppLogger.log('WebSocket received: $data');
           _handleMessage(data);
         },
         onError: (error) {
@@ -82,6 +89,7 @@ class WebSocketService {
   void _handleMessage(dynamic data) {
     try {
       final Map<String, dynamic> message = jsonDecode(data);
+      AppLogger.log('Handling message type: ${message['type']}');
 
       switch (message['type']) {
         case 'authenticated':
@@ -90,8 +98,15 @@ class WebSocketService {
           break;
 
         case 'new_message':
+          AppLogger.log('New message received: ${message['data']}');
           final messageData = Message.fromJson(message['data']);
-          _messageController?.add(messageData);
+          // Only add message if it's for the current conversation
+          if (_currentConversationId == null ||
+              message['data']['conversation_id'] == _currentConversationId) {
+            _messageController?.add(messageData);
+            AppLogger.log(
+                'Message added to stream for conversation $_currentConversationId');
+          }
           break;
 
         case 'user_typing':
@@ -126,6 +141,7 @@ class WebSocketService {
   void _handleDisconnection() {
     _isConnected = false;
     _channel = null;
+    _currentConversationId = null;
 
     // Try to reconnect after 3 seconds
     Timer(const Duration(seconds: 3), () {
@@ -139,20 +155,24 @@ class WebSocketService {
   }
 
   void joinConversation(int conversationId) {
+    _currentConversationId = conversationId;
     if (_isConnected) {
       _send({
         'type': 'join_conversation',
         'conversationId': conversationId,
       });
+      AppLogger.log('Joined conversation: $conversationId');
     }
   }
 
   void leaveConversation() {
-    if (_isConnected) {
+    if (_isConnected && _currentConversationId != null) {
       _send({
         'type': 'leave_conversation',
       });
+      AppLogger.log('Left conversation: $_currentConversationId');
     }
+    _currentConversationId = null;
   }
 
   void startTyping(int conversationId) {
@@ -182,13 +202,18 @@ class WebSocketService {
 
   void _send(Map<String, dynamic> data) {
     if (_isConnected && _channel != null) {
-      _channel!.sink.add(jsonEncode(data));
+      final jsonData = jsonEncode(data);
+      AppLogger.log('Sending WebSocket message: $jsonData');
+      _channel!.sink.add(jsonData);
+    } else {
+      AppLogger.log('Cannot send message: WebSocket not connected');
     }
   }
 
   Future<void> disconnect() async {
     _typingTimer?.cancel();
     _isConnected = false;
+    _currentConversationId = null;
     await _channel?.sink.close();
     _channel = null;
   }

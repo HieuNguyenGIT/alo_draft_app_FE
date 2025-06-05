@@ -38,6 +38,8 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    AppLogger.log(
+        'ChatScreen initialized for conversation ${widget.conversationId}');
     _initializeChat();
   }
 
@@ -45,10 +47,14 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       // Get current user ID
       _currentUserId = await SharedPreferencesHelper.getUserId();
+      AppLogger.log('Current user ID: $_currentUserId');
 
       // Connect to WebSocket if not connected
       if (!WebSocketService.instance.isConnected) {
+        AppLogger.log('WebSocket not connected, connecting...');
         await WebSocketService.instance.connect();
+        // Wait a bit for authentication
+        await Future.delayed(const Duration(seconds: 1));
       }
 
       // Join this conversation
@@ -58,37 +64,47 @@ class _ChatScreenState extends State<ChatScreen> {
       await _loadMessages();
 
       // Listen for new messages
-      _messageSubscription =
-          WebSocketService.instance.messageStream.listen((message) {
-        if (mounted) {
-          setState(() {
-            _messages.add(message);
-          });
-          _scrollToBottom();
+      _messageSubscription = WebSocketService.instance.messageStream.listen(
+        (message) {
+          AppLogger.log('Received message in chat screen: ${message.content}');
+          if (mounted) {
+            setState(() {
+              _messages.add(message);
+            });
+            _scrollToBottom();
 
-          // Mark as read if from other user
-          if (message.senderId != _currentUserId) {
-            MessageService.markMessagesAsRead(widget.conversationId);
+            // Mark as read if from other user
+            if (message.senderId != _currentUserId) {
+              MessageService.markMessagesAsRead(widget.conversationId);
+            }
           }
-        }
-      });
+        },
+        onError: (error) {
+          AppLogger.log('Message stream error: $error');
+        },
+      );
 
       // Listen for typing indicators
-      _typingSubscription =
-          WebSocketService.instance.typingStream.listen((data) {
-        if (mounted && data['conversationId'] == widget.conversationId) {
-          setState(() {
-            if (data['type'] == 'typing_start' &&
-                data['userId'] != _currentUserId) {
-              _otherUserTyping = true;
-              _typingUserName = data['userName'];
-            } else if (data['type'] == 'typing_stop') {
-              _otherUserTyping = false;
-              _typingUserName = null;
-            }
-          });
-        }
-      });
+      _typingSubscription = WebSocketService.instance.typingStream.listen(
+        (data) {
+          AppLogger.log('Typing indicator received: $data');
+          if (mounted && data['conversationId'] == widget.conversationId) {
+            setState(() {
+              if (data['type'] == 'typing_start' &&
+                  data['userId'] != _currentUserId) {
+                _otherUserTyping = true;
+                _typingUserName = data['userName'];
+              } else if (data['type'] == 'typing_stop') {
+                _otherUserTyping = false;
+                _typingUserName = null;
+              }
+            });
+          }
+        },
+        onError: (error) {
+          AppLogger.log('Typing stream error: $error');
+        },
+      );
 
       // Mark messages as read
       await MessageService.markMessagesAsRead(widget.conversationId);
@@ -102,32 +118,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _loadMessages() async {
-    try {
-      final messages = await MessageService.getMessages(widget.conversationId);
-      if (mounted) {
-        setState(() {
-          _messages.clear();
-          _messages.addAll(messages);
-          _isLoading = false;
-        });
-        _scrollToBottom();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load messages: $e')),
-        );
-      }
-    }
-  }
-
   Future<void> _sendMessage() async {
     final content = _messageController.text.trim();
     if (content.isEmpty || _isSending) return;
+
+    AppLogger.log('Sending message: $content');
 
     setState(() {
       _isSending = true;
@@ -141,11 +136,14 @@ class _ChatScreenState extends State<ChatScreen> {
       _messageController.clear();
 
       // Send the message
-      await MessageService.sendMessage(widget.conversationId, content);
+      final sentMessage =
+          await MessageService.sendMessage(widget.conversationId, content);
+      AppLogger.log('Message sent successfully: ${sentMessage.id}');
 
       // Note: Message will be added via WebSocket stream, not here
       _scrollToBottom();
     } catch (e) {
+      AppLogger.log('Failed to send message: $e');
       // Restore message content on error
       _messageController.text = content;
       if (mounted) {
@@ -371,5 +369,35 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  // Add this method to your _ChatScreenState class in chat_screen.dart
+
+  Future<void> _loadMessages() async {
+    try {
+      AppLogger.log(
+          'Loading messages for conversation ${widget.conversationId}');
+      final messages = await MessageService.getMessages(widget.conversationId);
+      AppLogger.log('Loaded ${messages.length} messages');
+
+      if (mounted) {
+        setState(() {
+          _messages.clear();
+          _messages.addAll(messages);
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      AppLogger.log('Error loading messages: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load messages: $e')),
+        );
+      }
+    }
   }
 }

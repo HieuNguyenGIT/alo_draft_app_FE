@@ -4,14 +4,20 @@ import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_event.dart';
 import 'package:alo_draft_app/blocs/auth/auth_state.dart';
 import 'package:alo_draft_app/blocs/todo/todo_bloc.dart';
+import 'package:alo_draft_app/blocs/message/message_bloc.dart';
 import 'package:alo_draft_app/repositories/auth_repository.dart';
 import 'package:alo_draft_app/repositories/todo_repository.dart';
 import 'package:alo_draft_app/screens/splash_screen.dart';
 import 'package:alo_draft_app/screens/login_screen.dart';
 import 'package:alo_draft_app/screens/register_screen.dart';
 import 'package:alo_draft_app/screens/home_screen.dart';
+import 'package:alo_draft_app/util/custom_logger.dart';
 
 void main() {
+  // Initialize logger
+  AppLogger.init(
+      'local'); // Set to 'local' for development, 'production' for release
+
   runApp(MyApp());
 }
 
@@ -34,6 +40,10 @@ class MyApp extends StatelessWidget {
           create: (context) => TodoBloc(
             todoRepository: todoRepository,
           ),
+        ),
+        // Add MessageBloc provider
+        BlocProvider<MessageBloc>(
+          create: (context) => MessageBloc(),
         ),
       ],
       child: MaterialApp(
