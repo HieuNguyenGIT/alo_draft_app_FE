@@ -1,13 +1,13 @@
-abstract class SettingsEvent {}
+abstract class SettingEvent {}
 
-class LoadSettings extends SettingsEvent {}
+class LoadSettings extends SettingEvent {}
 
-class NotificationToggled extends SettingsEvent {
-  final bool value;
-  NotificationToggled(this.value);
+class NotificationToggled extends SettingEvent {
+  final bool enabled;
+  NotificationToggled(this.enabled);
 }
 
-class DarkModeToggled extends SettingsEvent {
-  final bool value;
-  DarkModeToggled(this.value);
+class DarkModeToggled extends SettingEvent {
+  final bool enabled;
+  DarkModeToggled(this.enabled);
 }

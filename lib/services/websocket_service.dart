@@ -43,7 +43,7 @@ class WebSocketService {
       // Use the corrected WebSocket URL from constants
       final wsUrl = baseUrl.replaceFirst('http', 'ws').replaceFirst('/api', '');
 
-      AppLogger.log('Connecting to WebSocket: $wsUrl');
+      AppLogger.log('🔗 Connecting to WebSocket: $wsUrl');
 
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
 
@@ -59,28 +59,28 @@ class WebSocketService {
           'type': 'authenticate',
           'token': token,
         });
-        AppLogger.log('Authentication message sent');
+        AppLogger.log('🔐 Authentication message sent');
       }
 
       // Listen to messages
       _channel!.stream.listen(
         (data) {
-          AppLogger.log('WebSocket received: $data');
+          AppLogger.log('📥 WebSocket received: $data');
           _handleMessage(data);
         },
         onError: (error) {
-          AppLogger.log('WebSocket error: $error');
+          AppLogger.log('❌ WebSocket error: $error');
           _handleDisconnection();
         },
         onDone: () {
-          AppLogger.log('WebSocket connection closed');
+          AppLogger.log('🔌 WebSocket connection closed');
           _handleDisconnection();
         },
       );
 
-      AppLogger.log('WebSocket connected successfully');
+      AppLogger.log('✅ WebSocket connected successfully');
     } catch (e) {
-      AppLogger.log('Failed to connect WebSocket: $e');
+      AppLogger.log('❌ Failed to connect WebSocket: $e');
       _isConnected = false;
       rethrow;
     }
@@ -89,24 +89,23 @@ class WebSocketService {
   void _handleMessage(dynamic data) {
     try {
       final Map<String, dynamic> message = jsonDecode(data);
-      AppLogger.log('Handling message type: ${message['type']}');
+      AppLogger.log('🔍 Handling message type: ${message['type']}');
 
       switch (message['type']) {
         case 'authenticated':
           AppLogger.log(
-              'WebSocket authenticated for user: ${message['user']['name']}');
+              '✅ WebSocket authenticated for user: ${message['user']['name']}');
           break;
 
         case 'new_message':
-          AppLogger.log('New message received: ${message['data']}');
+          AppLogger.log('📨 New message received: ${message['data']}');
           final messageData = Message.fromJson(message['data']);
-          // Only add message if it's for the current conversation
-          if (_currentConversationId == null ||
-              message['data']['conversation_id'] == _currentConversationId) {
-            _messageController?.add(messageData);
-            AppLogger.log(
-                'Message added to stream for conversation $_currentConversationId');
-          }
+
+          // FIXED: Always broadcast messages to ALL listeners
+          // Both the chat screen AND the conversation list need to receive messages
+          _messageController?.add(messageData);
+          AppLogger.log(
+              '📤 Message broadcasted to all listeners (chat screen + conversation list)');
           break;
 
         case 'user_typing':
@@ -127,14 +126,14 @@ class WebSocketService {
           break;
 
         case 'error':
-          AppLogger.log('WebSocket error: ${message['message']}');
+          AppLogger.log('❌ WebSocket error: ${message['message']}');
           break;
 
         default:
-          AppLogger.log('Unknown message type: ${message['type']}');
+          AppLogger.log('❓ Unknown message type: ${message['type']}');
       }
     } catch (e) {
-      AppLogger.log('Error parsing WebSocket message: $e');
+      AppLogger.log('❌ Error parsing WebSocket message: $e');
     }
   }
 
@@ -146,9 +145,9 @@ class WebSocketService {
     // Try to reconnect after 3 seconds
     Timer(const Duration(seconds: 3), () {
       if (!_isConnected) {
-        AppLogger.log('Attempting to reconnect WebSocket...');
+        AppLogger.log('🔄 Attempting to reconnect WebSocket...');
         connect().catchError((e) {
-          AppLogger.log('Reconnection failed: $e');
+          AppLogger.log('❌ Reconnection failed: $e');
         });
       }
     });
@@ -161,7 +160,7 @@ class WebSocketService {
         'type': 'join_conversation',
         'conversationId': conversationId,
       });
-      AppLogger.log('Joined conversation: $conversationId');
+      AppLogger.log('🏠 Joined conversation: $conversationId');
     }
   }
 
@@ -170,7 +169,7 @@ class WebSocketService {
       _send({
         'type': 'leave_conversation',
       });
-      AppLogger.log('Left conversation: $_currentConversationId');
+      AppLogger.log('🚪 Left conversation: $_currentConversationId');
     }
     _currentConversationId = null;
   }
@@ -203,10 +202,10 @@ class WebSocketService {
   void _send(Map<String, dynamic> data) {
     if (_isConnected && _channel != null) {
       final jsonData = jsonEncode(data);
-      AppLogger.log('Sending WebSocket message: $jsonData');
+      AppLogger.log('📤 Sending WebSocket message: $jsonData');
       _channel!.sink.add(jsonData);
     } else {
-      AppLogger.log('Cannot send message: WebSocket not connected');
+      AppLogger.log('❌ Cannot send message: WebSocket not connected');
     }
   }
 

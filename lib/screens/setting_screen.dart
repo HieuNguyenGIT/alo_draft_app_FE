@@ -1,3 +1,5 @@
+import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
+import 'package:alo_draft_app/blocs/auth/auth_event.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:alo_draft_app/blocs/setting/setting_bloc.dart';
@@ -25,6 +27,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _settingsBloc.close();
     super.dispose();
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                // Trigger logout
+                context.read<AuthBloc>().add(LoggedOut());
+              },
+              child: const Text(
+                'Logout',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -171,6 +204,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         );
                       }).toList(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Account Section
+                  const Text(
+                    'Account',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Card(
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading:
+                              const Icon(Icons.privacy_tip, color: Colors.blue),
+                          title: const Text('Privacy Policy'),
+                          subtitle: const Text('View our privacy policy'),
+                          trailing:
+                              const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      'Privacy Policy feature coming soon!')),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.help_outline,
+                              color: Colors.green),
+                          title: const Text('Help & Support'),
+                          subtitle: const Text('Get help and contact support'),
+                          trailing:
+                              const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      'Help & Support feature coming soon!')),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.info_outline,
+                              color: Colors.orange),
+                          title: const Text('About'),
+                          subtitle: const Text('App version and information'),
+                          trailing:
+                              const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('About'),
+                                content: const Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Alo Draft App'),
+                                    Text('Version: 1.0.0'),
+                                    Text('Build: 2024.01'),
+                                    SizedBox(height: 10),
+                                    Text(
+                                        'A comprehensive business management app.'),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Close'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.logout, color: Colors.red),
+                          title: const Text(
+                            'Logout',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                          subtitle: const Text('Sign out of your account'),
+                          trailing: const Icon(Icons.arrow_forward_ios,
+                              size: 16, color: Colors.red),
+                          onTap: _showLogoutDialog,
+                        ),
+                      ],
                     ),
                   ),
                 ],

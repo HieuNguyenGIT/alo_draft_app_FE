@@ -1,10 +1,13 @@
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/material.dart';
 import 'package:alo_draft_app/blocs/setting/setting_event.dart';
 import 'package:alo_draft_app/blocs/setting/setting_state.dart';
 import 'package:alo_draft_app/models/setting_model.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
-class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
+class SettingsBloc extends Bloc<SettingEvent, SettingsState> {
+  bool _notificationsEnabled = true;
+  bool _darkModeEnabled = false;
+
   SettingsBloc() : super(SettingsInitial()) {
     on<LoadSettings>(_onLoadSettings);
     on<NotificationToggled>(_onNotificationToggled);
@@ -14,14 +17,14 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   void _onLoadSettings(LoadSettings event, Emitter<SettingsState> emit) async {
     emit(SettingsLoading());
     try {
-      // Simulate loading settings
+      // Simulate loading delay
       await Future.delayed(const Duration(milliseconds: 500));
 
       final settingsItems = [
         SettingsItem(
-          title: 'Profile',
-          subtitle: 'Edit your personal information',
-          icon: Icons.person,
+          title: 'Language',
+          subtitle: 'English',
+          icon: Icons.language,
         ),
         SettingsItem(
           title: 'Security',
@@ -29,35 +32,20 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
           icon: Icons.security,
         ),
         SettingsItem(
-          title: 'Privacy',
-          subtitle: 'Data and privacy settings',
-          icon: Icons.privacy_tip,
-        ),
-        SettingsItem(
-          title: 'Language',
-          subtitle: 'Choose your preferred language',
-          icon: Icons.language,
-        ),
-        SettingsItem(
-          title: 'Storage',
-          subtitle: 'Manage app storage',
+          title: 'Data & Storage',
+          subtitle: 'Manage your data and storage',
           icon: Icons.storage,
         ),
         SettingsItem(
-          title: 'Help & Support',
-          subtitle: 'Get help and contact support',
-          icon: Icons.help,
-        ),
-        SettingsItem(
-          title: 'About',
-          subtitle: 'App version and information',
-          icon: Icons.info,
+          title: 'Backup',
+          subtitle: 'Backup and restore settings',
+          icon: Icons.backup,
         ),
       ];
 
       emit(SettingsLoaded(
-        notificationsEnabled: true,
-        darkModeEnabled: false,
+        notificationsEnabled: _notificationsEnabled,
+        darkModeEnabled: _darkModeEnabled,
         settingsItems: settingsItems,
       ));
     } catch (e) {
@@ -66,23 +54,30 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
   }
 
   void _onNotificationToggled(
-      NotificationToggled event, Emitter<SettingsState> emit) {
-    final currentState = state;
-    if (currentState is SettingsLoaded) {
+      NotificationToggled event, Emitter<SettingsState> emit) async {
+    _notificationsEnabled = event.enabled;
+
+    // Re-emit current state with updated notification setting
+    if (state is SettingsLoaded) {
+      final currentState = state as SettingsLoaded;
       emit(SettingsLoaded(
-        notificationsEnabled: event.value,
+        notificationsEnabled: _notificationsEnabled,
         darkModeEnabled: currentState.darkModeEnabled,
         settingsItems: currentState.settingsItems,
       ));
     }
   }
 
-  void _onDarkModeToggled(DarkModeToggled event, Emitter<SettingsState> emit) {
-    final currentState = state;
-    if (currentState is SettingsLoaded) {
+  void _onDarkModeToggled(
+      DarkModeToggled event, Emitter<SettingsState> emit) async {
+    _darkModeEnabled = event.enabled;
+
+    // Re-emit current state with updated dark mode setting
+    if (state is SettingsLoaded) {
+      final currentState = state as SettingsLoaded;
       emit(SettingsLoaded(
         notificationsEnabled: currentState.notificationsEnabled,
-        darkModeEnabled: event.value,
+        darkModeEnabled: _darkModeEnabled,
         settingsItems: currentState.settingsItems,
       ));
     }

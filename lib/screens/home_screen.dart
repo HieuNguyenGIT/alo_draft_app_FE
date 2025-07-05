@@ -2,9 +2,6 @@ import 'package:alo_draft_app/screens/contact_screen.dart';
 import 'package:alo_draft_app/screens/message_screen.dart';
 import 'package:alo_draft_app/screens/setting_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
-import 'package:alo_draft_app/blocs/auth/auth_event.dart';
 import 'package:alo_draft_app/screens/todo_screen.dart';
 import 'package:alo_draft_app/screens/analytics_screen.dart';
 
@@ -39,14 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_currentIndex]),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.exit_to_app),
-            onPressed: () {
-              context.read<AuthBloc>().add(LoggedOut());
-            },
-          ),
-        ],
+        // Removed logout button from here
       ),
       body: IndexedStack(
         index: _currentIndex,
