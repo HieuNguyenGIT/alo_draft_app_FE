@@ -1,3 +1,4 @@
+import 'package:alo_draft_app/screens/forgot_pwd_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
@@ -7,11 +8,13 @@ import 'package:alo_draft_app/blocs/todo/todo_bloc.dart';
 import 'package:alo_draft_app/blocs/message/message_bloc.dart';
 import 'package:alo_draft_app/repositories/auth_repository.dart';
 import 'package:alo_draft_app/repositories/todo_repository.dart';
+import 'package:alo_draft_app/screens/intro_screen.dart';
 import 'package:alo_draft_app/screens/splash_screen.dart';
 import 'package:alo_draft_app/screens/login_screen.dart';
 import 'package:alo_draft_app/screens/register_screen.dart';
 import 'package:alo_draft_app/screens/home_screen.dart';
 import 'package:alo_draft_app/util/custom_logger.dart';
+import 'package:alo_draft_app/services/websocket_service.dart';
 
 void main() {
   // Initialize logger
@@ -47,28 +50,48 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Todo App',
+        title: 'AloDraft App',
         theme: ThemeData(
-          primarySwatch: Colors.blue,
+          primarySwatch: Colors.orange,
+          primaryColor: Colors.orange,
           visualDensity: VisualDensity.adaptivePlatformDensity,
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            iconTheme: IconThemeData(color: Colors.black87),
+            titleTextStyle: TextStyle(
+              color: Colors.black87,
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ),
         home: BlocBuilder<AuthBloc, AuthState>(
           builder: (context, state) {
-            if (state is AuthInitial) {
+            AppLogger.log(
+                "🏠 Main BlocBuilder - Auth state: ${state.runtimeType}");
+
+            if (state is AuthInitial || state is AuthLoading) {
               return const SplashScreen();
             }
             if (state is AuthAuthenticated) {
               return const HomeScreen();
             }
             if (state is AuthUnauthenticated) {
-              return const LoginScreen();
+              // 🔥 CRITICAL: Disconnect WebSocket when user is unauthenticated
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                WebSocketService.instance.disconnect();
+              });
+              return const IntroScreen();
             }
             return const SplashScreen();
           },
         ),
         routes: {
+          '/intro': (context) => const IntroScreen(),
           '/login': (context) => const LoginScreen(),
           '/register': (context) => const RegisterScreen(),
+          '/forgot-password': (context) => const ForgotPasswordScreen(),
           '/home': (context) => const HomeScreen(),
         },
       ),

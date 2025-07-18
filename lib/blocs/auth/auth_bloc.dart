@@ -1,3 +1,4 @@
+import 'package:alo_draft_app/util/custom_logger.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_event.dart';
 import 'package:alo_draft_app/blocs/auth/auth_state.dart';
@@ -58,8 +59,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _onLoggedOut(LoggedOut event, Emitter<AuthState> emit) async {
+    AppLogger.log("🔄 Processing logout...");
     emit(AuthLoading());
     await authRepository.logout();
+    AppLogger.log("✅ Logout complete, emitting AuthUnauthenticated");
     emit(AuthUnauthenticated());
   }
 }
