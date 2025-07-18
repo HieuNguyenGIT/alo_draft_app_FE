@@ -41,7 +41,8 @@ class WebSocketService {
 
     try {
       // Use the corrected WebSocket URL from constants
-      final wsUrl = baseUrl.replaceFirst('http', 'ws').replaceFirst('/api', '');
+      final wsUrl =
+          baseUrl.replaceFirst('http', 'ws').replaceFirst('/api', '/websocket');
 
       AppLogger.log('🔗 Connecting to WebSocket: $wsUrl');
 

@@ -290,6 +290,7 @@ class _MessagesScreenState extends State<MessagesScreen>
           },
         ),
         floatingActionButton: FloatingActionButton(
+          heroTag: "msg_fab",
           onPressed: () {
             Navigator.of(context)
                 .push(

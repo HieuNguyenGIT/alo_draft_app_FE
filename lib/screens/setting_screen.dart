@@ -1,6 +1,7 @@
 import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_event.dart';
 import 'package:alo_draft_app/blocs/auth/auth_state.dart';
+import 'package:alo_draft_app/screens/socket_test_screen.dart';
 import 'package:alo_draft_app/util/custom_logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -270,6 +271,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 const SnackBar(
                                     content: Text(
                                         'Help & Support feature coming soon!')),
+                              );
+                            },
+                          ),
+                          // Add this somewhere in your settings list
+                          ListTile(
+                            leading: const Icon(Icons.wifi, color: Colors.blue),
+                            title: const Text('Socket.IO Test'),
+                            subtitle: const Text('Test Socket.IO connection'),
+                            trailing:
+                                const Icon(Icons.arrow_forward_ios, size: 16),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const SocketIOTestScreen(),
+                                ),
                               );
                             },
                           ),

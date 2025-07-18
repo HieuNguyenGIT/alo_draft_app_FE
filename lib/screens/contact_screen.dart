@@ -524,6 +524,7 @@ class _ContactListScreenState extends State<ContactListScreen>
           ],
         ),
         floatingActionButton: FloatingActionButton(
+          heroTag: "contact_fab",
           onPressed: _showFilterBottomSheet,
           backgroundColor: Theme.of(context).primaryColor,
           child: const Icon(Icons.filter_list, color: Colors.white),
