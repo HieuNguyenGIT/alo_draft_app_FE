@@ -276,16 +276,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                           // Add this somewhere in your settings list
                           ListTile(
-                            leading: const Icon(Icons.wifi, color: Colors.blue),
-                            title: const Text('Socket.IO Test'),
-                            subtitle: const Text('Test Socket.IO connection'),
+                            leading: const Icon(Icons.compare_arrows,
+                                color: Colors.purple),
+                            title: const Text('Dual Connection Test'),
+                            subtitle:
+                                const Text('Test both Socket.IO and WebSocket'),
                             trailing:
                                 const Icon(Icons.arrow_forward_ios, size: 16),
                             onTap: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (context) =>
-                                      const SocketIOTestScreen(),
+                                      const DualConnectionTestScreen(),
                                 ),
                               );
                             },

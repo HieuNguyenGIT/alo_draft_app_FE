@@ -13,7 +13,7 @@ class WebSocketService {
   StreamController<Map<String, dynamic>>? _typingController;
   bool _isConnected = false;
   Timer? _typingTimer;
-  int? _currentConversationId; // Track current conversation
+  int? _currentConversationId;
 
   static WebSocketService get instance {
     _instance ??= WebSocketService._internal();
@@ -22,13 +22,11 @@ class WebSocketService {
 
   WebSocketService._internal();
 
-  // Stream for receiving new messages
   Stream<Message> get messageStream {
     _messageController ??= StreamController<Message>.broadcast();
     return _messageController!.stream;
   }
 
-  // Stream for typing indicators
   Stream<Map<String, dynamic>> get typingStream {
     _typingController ??= StreamController<Map<String, dynamic>>.broadcast();
     return _typingController!.stream;
@@ -40,13 +38,10 @@ class WebSocketService {
     if (_isConnected) return;
 
     try {
-      // Use the corrected WebSocket URL from constants
-      final wsUrl =
-          baseUrl.replaceFirst('http', 'ws').replaceFirst('/api', '/websocket');
+      // Use the corrected WebSocket URL with /ws path
+      AppLogger.log('🔗 Connecting to WebSocket: $webSocketUrl');
 
-      AppLogger.log('🔗 Connecting to WebSocket: $wsUrl');
-
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      _channel = WebSocketChannel.connect(Uri.parse(webSocketUrl));
 
       // Wait for connection to be established
       await Future.delayed(const Duration(milliseconds: 500));
@@ -90,7 +85,7 @@ class WebSocketService {
   void _handleMessage(dynamic data) {
     try {
       final Map<String, dynamic> message = jsonDecode(data);
-      AppLogger.log('🔍 Handling message type: ${message['type']}');
+      AppLogger.log('🔍 Handling WebSocket message type: ${message['type']}');
 
       switch (message['type']) {
         case 'authenticated':
@@ -99,14 +94,11 @@ class WebSocketService {
           break;
 
         case 'new_message':
-          AppLogger.log('📨 New message received: ${message['data']}');
-          final messageData = Message.fromJson(message['data']);
-
-          // FIXED: Always broadcast messages to ALL listeners
-          // Both the chat screen AND the conversation list need to receive messages
-          _messageController?.add(messageData);
           AppLogger.log(
-              '📤 Message broadcasted to all listeners (chat screen + conversation list)');
+              '📨 WebSocket new message received: ${message['data']}');
+          final messageData = Message.fromJson(message['data']);
+          _messageController?.add(messageData);
+          AppLogger.log('📤 WebSocket message broadcasted to all listeners');
           break;
 
         case 'user_typing':
@@ -131,7 +123,7 @@ class WebSocketService {
           break;
 
         default:
-          AppLogger.log('❓ Unknown message type: ${message['type']}');
+          AppLogger.log('❓ Unknown WebSocket message type: ${message['type']}');
       }
     } catch (e) {
       AppLogger.log('❌ Error parsing WebSocket message: $e');
@@ -148,7 +140,7 @@ class WebSocketService {
       if (!_isConnected) {
         AppLogger.log('🔄 Attempting to reconnect WebSocket...');
         connect().catchError((e) {
-          AppLogger.log('❌ Reconnection failed: $e');
+          AppLogger.log('❌ WebSocket reconnection failed: $e');
         });
       }
     });
@@ -161,7 +153,7 @@ class WebSocketService {
         'type': 'join_conversation',
         'conversationId': conversationId,
       });
-      AppLogger.log('🏠 Joined conversation: $conversationId');
+      AppLogger.log('🏠 WebSocket joined conversation: $conversationId');
     }
   }
 
@@ -170,7 +162,7 @@ class WebSocketService {
       _send({
         'type': 'leave_conversation',
       });
-      AppLogger.log('🚪 Left conversation: $_currentConversationId');
+      AppLogger.log('🚪 WebSocket left conversation: $_currentConversationId');
     }
     _currentConversationId = null;
   }
@@ -206,7 +198,7 @@ class WebSocketService {
       AppLogger.log('📤 Sending WebSocket message: $jsonData');
       _channel!.sink.add(jsonData);
     } else {
-      AppLogger.log('❌ Cannot send message: WebSocket not connected');
+      AppLogger.log('❌ Cannot send WebSocket message: not connected');
     }
   }
 
@@ -216,6 +208,7 @@ class WebSocketService {
     _currentConversationId = null;
     await _channel?.sink.close();
     _channel = null;
+    AppLogger.log('✅ WebSocket disconnected');
   }
 
   void dispose() {

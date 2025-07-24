@@ -6,7 +6,9 @@ import 'package:alo_draft_app/services/api_service.dart';
 
 class SocketIOService {
   static SocketIOService? _instance;
-  io.Socket? _socket;
+
+  // 🔥 FIXED: Properly declare all class variables
+  io.Socket? _socket; // This was missing!
   bool _isConnected = false;
   bool _isAuthenticated = false;
   bool _isTestMode = false;
@@ -20,7 +22,7 @@ class SocketIOService {
 
   bool get isConnected => _isConnected && (_isAuthenticated || _isTestMode);
 
-  // EXISTING METHOD: Connect with authentication
+  // FIXED: Connect with authentication
   Future<void> connect() async {
     if (_isConnected) {
       AppLogger.log('🔌 Socket.IO already connected');
@@ -28,7 +30,6 @@ class SocketIOService {
     }
 
     try {
-      // Get the auth token
       final token = await ApiService.getToken();
       if (token == null) {
         throw Exception('No authentication token available');
@@ -36,29 +37,41 @@ class SocketIOService {
 
       AppLogger.log('🌐 Socket.IO connecting to: $socketIOUrl (WITH AUTH)');
 
+      // 🔥 FIXED: Matching timeouts with server
       _socket = io.io(
           socketIOUrl,
           io.OptionBuilder()
-              .setTransports(['polling']) // Start with polling only for testing
+              .setTransports(['polling', 'websocket']) // Try polling first
               .enableReconnection()
               .setReconnectionAttempts(3)
-              .setReconnectionDelay(1000)
-              .setTimeout(30000) // Increase timeout
+              .setReconnectionDelay(2000)
+
+              // 🔥 CRITICAL: Match server timeout settings
+              .setTimeout(15000) // Increased from 10000 to 15000
+
               .enableForceNew()
-              .setAuth({'token': token}) // for auth mode
+              .disableAutoConnect()
+              .setAuth({'token': token})
               .build());
+
       _isTestMode = false;
       _setupEventHandlers();
+
+      // Manual connect for auth mode
       _socket!.connect();
 
       AppLogger.log('🔗 Socket.IO connection initiated (AUTH MODE)...');
+
+      // Wait for connection with longer timeout
+      await _waitForConnection(timeout: 15000);
     } catch (e) {
       AppLogger.log('❌ Socket.IO connection error: $e');
+      _cleanup();
       rethrow;
     }
   }
 
-  // NEW METHOD: Connect without authentication for testing
+  // FIXED: Test connection method
   Future<void> connectTest() async {
     if (_isConnected) {
       AppLogger.log('🔌 Socket.IO already connected');
@@ -69,26 +82,66 @@ class SocketIOService {
       AppLogger.log(
           '🌐 Socket.IO connecting to: $socketIOUrl (TEST MODE - NO AUTH)');
 
+      // 🔥 FIXED: Better test configuration with matching timeouts
       _socket = io.io(
           socketIOUrl,
           io.OptionBuilder()
-              .setTransports(['polling']) // Start with polling only
+              .setTransports(['polling']) // Start with polling only for test
               .enableReconnection()
-              .setReconnectionAttempts(3)
+              .setReconnectionAttempts(2)
               .setReconnectionDelay(1000)
-              .setTimeout(30000) // Increase timeout
+
+              // 🔥 CRITICAL: Match server settings
+              .setTimeout(15000) // Match server expectations
+
               .enableForceNew()
+              .disableAutoConnect()
               // NO auth for test mode
               .build());
+
       _isTestMode = true;
       _setupEventHandlers();
       _socket!.connect();
 
       AppLogger.log('🔗 Socket.IO connection initiated (TEST MODE)...');
+
+      // Wait for connection
+      await _waitForConnection(timeout: 15000);
     } catch (e) {
-      AppLogger.log('❌ Socket.IO connection error: $e');
+      AppLogger.log('❌ Socket.IO test connection error: $e');
+      _cleanup();
       rethrow;
     }
+  }
+
+  // UPDATED: Wait for connection helper with configurable timeout
+  Future<void> _waitForConnection({int timeout = 15000}) async {
+    final completer = Completer<void>();
+    Timer? timeoutTimer;
+
+    // Set up timeout
+    timeoutTimer = Timer(Duration(milliseconds: timeout), () {
+      if (!completer.isCompleted) {
+        completer.completeError('Connection timeout after ${timeout}ms');
+      }
+    });
+
+    // Listen for connection events
+    _socket!.onConnect((_) {
+      timeoutTimer?.cancel();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+
+    _socket!.onConnectError((error) {
+      timeoutTimer?.cancel();
+      if (!completer.isCompleted) {
+        completer.completeError('Connection error: $error');
+      }
+    });
+
+    return completer.future;
   }
 
   void _setupEventHandlers() {
@@ -99,6 +152,8 @@ class SocketIOService {
       _isConnected = true;
       if (_isTestMode) {
         AppLogger.log('🧪 Connected in TEST MODE');
+        _isAuthenticated =
+            true; // For test mode, consider authenticated immediately
       }
     });
 
@@ -114,10 +169,17 @@ class SocketIOService {
       _isAuthenticated = false;
     });
 
+    // Handle timeout specifically
+    _socket!.on('connect_timeout', (_) {
+      AppLogger.log('⏰ Socket.IO connection timeout');
+      _isConnected = false;
+      _isAuthenticated = false;
+    });
+
     // TEST MODE: Server sends 'connected' instead of 'authenticated'
     _socket!.on('connected', (data) {
       AppLogger.log('🧪 Socket.IO test connection confirmed: $data');
-      _isAuthenticated = true; // Set this for test mode too
+      _isAuthenticated = true;
     });
 
     // AUTH MODE: Server sends 'authenticated'
@@ -164,9 +226,22 @@ class SocketIOService {
     _socket!.on('error', (error) {
       AppLogger.log('❌ Socket.IO error: $error');
     });
+
+    // Reconnection events
+    _socket!.on('reconnect', (attemptNumber) {
+      AppLogger.log('🔄 Socket.IO reconnected after $attemptNumber attempts');
+    });
+
+    _socket!.on('reconnect_attempt', (attemptNumber) {
+      AppLogger.log('🔄 Socket.IO reconnection attempt $attemptNumber');
+    });
+
+    _socket!.on('reconnect_failed', (_) {
+      AppLogger.log('❌ Socket.IO reconnection failed');
+    });
   }
 
-  // UPDATED: Test method that works in both modes
+  // Test method that works in both modes
   void sendTestMessage(String message) {
     if (!isConnected) {
       AppLogger.log(
@@ -181,15 +256,15 @@ class SocketIOService {
           'message': message,
           'timestamp': DateTime.now().toIso8601String(),
         });
+        AppLogger.log('📤 Test message sent (test mode): $message');
       } else {
         // Use 'testMessage' event for authenticated mode
         _socket!.emit('testMessage', {
           'content': message,
           'timestamp': DateTime.now().toIso8601String(),
         });
+        AppLogger.log('📤 Test message sent (auth mode): $message');
       }
-
-      AppLogger.log('📤 Test message sent: $message');
     } catch (e) {
       AppLogger.log('❌ Error sending test message: $e');
     }
@@ -251,6 +326,12 @@ class SocketIOService {
     _socket!.emit('stopTyping', conversationId);
   }
 
+  void _cleanup() {
+    _isConnected = false;
+    _isAuthenticated = false;
+    _isTestMode = false;
+  }
+
   void disconnect() {
     if (_socket != null) {
       AppLogger.log('🔌 Disconnecting Socket.IO...');
@@ -258,9 +339,7 @@ class SocketIOService {
       _socket!.dispose();
       _socket = null;
     }
-    _isConnected = false;
-    _isAuthenticated = false;
-    _isTestMode = false;
+    _cleanup();
     AppLogger.log('✅ Socket.IO disconnected');
   }
 

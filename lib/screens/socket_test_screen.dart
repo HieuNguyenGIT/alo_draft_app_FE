@@ -1,98 +1,169 @@
+import 'package:alo_draft_app/util/sockettest.dart';
 import 'package:flutter/material.dart';
 import 'package:alo_draft_app/services/socket_io_service.dart';
+import 'package:alo_draft_app/services/websocket_service.dart';
 import 'package:alo_draft_app/util/custom_logger.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:alo_draft_app/util/constants.dart';
 
-class SocketIOTestScreen extends StatefulWidget {
-  const SocketIOTestScreen({super.key});
+class DualConnectionTestScreen extends StatefulWidget {
+  const DualConnectionTestScreen({super.key});
 
   @override
-  State<SocketIOTestScreen> createState() => _SocketIOTestScreenState();
+  State<DualConnectionTestScreen> createState() =>
+      _DualConnectionTestScreenState();
 }
 
-class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
+class _DualConnectionTestScreenState extends State<DualConnectionTestScreen> {
   final TextEditingController _messageController = TextEditingController();
   final List<String> _logs = [];
-  bool _isConnected = false;
+
+  bool _socketIOConnected = false;
+  bool _webSocketConnected = false;
+
   late SocketIOService _socketService;
+  late WebSocketService _webSocketService;
 
   @override
   void initState() {
     super.initState();
     _socketService = SocketIOService.instance;
+    _webSocketService = WebSocketService.instance;
     _updateConnectionStatus();
   }
 
   void _updateConnectionStatus() {
     setState(() {
-      _isConnected = _socketService.isConnected;
+      _socketIOConnected = _socketService.isConnected;
+      _webSocketConnected = _webSocketService.isConnected;
     });
   }
 
   void _addLog(String message) {
     setState(() {
       _logs.insert(0, '${DateTime.now().toLocal()}: $message');
-      if (_logs.length > 20) {
+      if (_logs.length > 50) {
         _logs.removeLast();
       }
     });
     AppLogger.log(message);
   }
 
-  Future<void> _connect() async {
-    _addLog('Attempting to connect to Socket.IO...');
+  // Socket.IO Methods
+  Future<void> _connectSocketIO() async {
+    _addLog('🟦 Connecting Socket.IO...');
     try {
       await _socketService.connect();
-
-      // Wait a moment for authentication
       await Future.delayed(const Duration(seconds: 2));
-
       _updateConnectionStatus();
-      _addLog(_isConnected ? 'Connected successfully!' : 'Connection failed');
+      _addLog(_socketIOConnected
+          ? '🟦 Socket.IO Connected!'
+          : '🟦 Socket.IO Failed');
     } catch (e) {
-      _addLog('Connection error: $e');
+      _addLog('🟦 Socket.IO Error: $e');
     }
   }
 
-  void _disconnect() {
-    _addLog('Disconnecting from Socket.IO...');
+  void _disconnectSocketIO() {
+    _addLog('🟦 Disconnecting Socket.IO...');
     _socketService.disconnect();
     _updateConnectionStatus();
-    _addLog('Disconnected');
+    _addLog('🟦 Socket.IO Disconnected');
   }
 
-  void _sendTestMessage() {
+  void _sendSocketIOMessage() {
     final message = _messageController.text.trim();
-    if (message.isNotEmpty) {
-      _addLog('Sending test message: $message');
+    if (message.isNotEmpty && _socketIOConnected) {
+      _addLog('🟦 Sending Socket.IO message: $message');
       _socketService.sendTestMessage(message);
       _messageController.clear();
     }
   }
 
-  void _joinTestConversation() {
-    _addLog('Joining test conversation (ID: 1)');
-    _socketService.joinConversation(1);
+  // WebSocket Methods
+  Future<void> _connectWebSocket() async {
+    _addLog('🟩 Connecting WebSocket...');
+    try {
+      await _webSocketService.connect();
+      await Future.delayed(const Duration(seconds: 2));
+      _updateConnectionStatus();
+      _addLog(_webSocketConnected
+          ? '🟩 WebSocket Connected!'
+          : '🟩 WebSocket Failed');
+    } catch (e) {
+      _addLog('🟩 WebSocket Error: $e');
+    }
   }
 
-  void _sendRealMessage() {
-    final message = _messageController.text.trim();
-    if (message.isNotEmpty) {
-      _addLog('Sending real message to conversation 1: $message');
-      _socketService.sendMessage(
-        conversationId: 1,
-        content: message,
-        temporaryId: DateTime.now().millisecondsSinceEpoch.toString(),
-      );
-      _messageController.clear();
+  void _disconnectWebSocket() {
+    _addLog('🟩 Disconnecting WebSocket...');
+    _webSocketService.disconnect();
+    _updateConnectionStatus();
+    _addLog('🟩 WebSocket Disconnected');
+  }
+
+  // Test HTTP endpoint first
+  Future<void> _testHttpEndpoint() async {
+    _addLog('🌐 Testing HTTP endpoint...');
+    try {
+      final response = await http.get(
+        Uri.parse('${baseUrl.replaceAll('/api', '')}/socket-test'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _addLog('✅ HTTP endpoint works: ${data['message']}');
+        _addLog('👥 Connected clients: ${data['connectedClients']}');
+      } else {
+        _addLog('❌ HTTP endpoint failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      _addLog('❌ HTTP test error: $e');
     }
+  }
+
+  // Test basic Socket.IO connection (no auth)
+  Future<void> _testBasicSocketIO() async {
+    _addLog('🧪 Testing basic Socket.IO (no auth)...');
+    try {
+      await SimpleSocketTest.testBasicConnection();
+    } catch (e) {
+      _addLog('❌ Basic test error: $e');
+    }
+  }
+
+  // Test WebSocket transport
+  Future<void> _testWebSocketTransport() async {
+    _addLog('🧪 Testing WebSocket transport...');
+    try {
+      await SimpleSocketTest.testWithWebSocketTransport();
+    } catch (e) {
+      _addLog('❌ WebSocket transport test error: $e');
+    }
+  }
+
+  Future<void> _connectBoth() async {
+    _addLog('🚀 Connecting both Socket.IO and WebSocket...');
+    await Future.wait([
+      _connectSocketIO(),
+      _connectWebSocket(),
+    ]);
+  }
+
+  void _disconnectBoth() {
+    _addLog('🛑 Disconnecting both connections...');
+    _disconnectSocketIO();
+    _disconnectWebSocket();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Socket.IO Test'),
-        backgroundColor: Colors.orange,
+        title: const Text('Dual Connection Test'),
+        backgroundColor: Colors.purple,
         foregroundColor: Colors.white,
       ),
       body: Padding(
@@ -100,44 +171,171 @@ class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Connection Status
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _isConnected ? Colors.green[100] : Colors.red[100],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _isConnected ? Colors.green : Colors.red,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _isConnected ? Icons.check_circle : Icons.error,
-                    color: _isConnected ? Colors.green : Colors.red,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Status: ${_isConnected ? "Connected & Authenticated" : "Disconnected"}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: _isConnected ? Colors.green[800] : Colors.red[800],
+            // Connection Status Cards
+            Row(
+              children: [
+                Expanded(
+                  child: Card(
+                    color:
+                        _socketIOConnected ? Colors.blue[100] : Colors.red[100],
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        children: [
+                          Icon(
+                            _socketIOConnected
+                                ? Icons.check_circle
+                                : Icons.error,
+                            color:
+                                _socketIOConnected ? Colors.blue : Colors.red,
+                            size: 32,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Socket.IO',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _socketIOConnected
+                                  ? Colors.blue[800]
+                                  : Colors.red[800],
+                            ),
+                          ),
+                          Text(
+                            _socketIOConnected ? 'Connected' : 'Disconnected',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _socketIOConnected
+                                  ? Colors.blue[600]
+                                  : Colors.red[600],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Card(
+                    color: _webSocketConnected
+                        ? Colors.green[100]
+                        : Colors.red[100],
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Column(
+                        children: [
+                          Icon(
+                            _webSocketConnected
+                                ? Icons.check_circle
+                                : Icons.error,
+                            color:
+                                _webSocketConnected ? Colors.green : Colors.red,
+                            size: 32,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'WebSocket',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _webSocketConnected
+                                  ? Colors.green[800]
+                                  : Colors.red[800],
+                            ),
+                          ),
+                          Text(
+                            _webSocketConnected ? 'Connected' : 'Disconnected',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _webSocketConnected
+                                  ? Colors.green[600]
+                                  : Colors.red[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
 
             const SizedBox(height: 16),
 
-            // Connection Buttons
+            // Debug Test Buttons
+            const Text(
+              'Debug Tests:',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _testHttpEndpoint,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange),
+                    child: const Text('HTTP Test',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        )),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _testBasicSocketIO,
+                    style:
+                        ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                    child: const Text('Basic IO',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        )),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _testWebSocketTransport,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo),
+                    child: const Text('WS Transport',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        )),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // 🔥 NEW: Add message test button
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _testMessageSending,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple),
+                    child: const Text('Messages',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        )),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Dual Connection Buttons
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _isConnected ? null : _connect,
-                    icon: const Icon(Icons.connect_without_contact),
-                    label: const Text('Connect (Auth)'),
+                    onPressed: (!_socketIOConnected || !_webSocketConnected)
+                        ? _connectBoth
+                        : null,
+                    icon: const Icon(Icons.power),
+                    label: const Text('Connect Both'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
@@ -147,11 +345,13 @@ class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _isConnected ? _disconnect : _connectTest,
-                    icon: Icon(_isConnected ? Icons.close : Icons.bug_report),
-                    label: Text(_isConnected ? 'Disconnect' : 'Test Mode'),
+                    onPressed: (_socketIOConnected || _webSocketConnected)
+                        ? _disconnectBoth
+                        : null,
+                    icon: const Icon(Icons.power_off),
+                    label: const Text('Disconnect Both'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isConnected ? Colors.red : Colors.blue,
+                      backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -161,43 +361,46 @@ class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
 
             const SizedBox(height: 16),
 
-            // Message Input
+            // Individual Connection Buttons
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter test message...',
-                      border: OutlineInputBorder(),
-                    ),
-                    enabled: _isConnected,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _isConnected ? _sendTestMessage : null,
-                  child: const Text('Test'),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-
-            // Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isConnected ? _joinTestConversation : null,
-                    child: const Text('Join Conv 1'),
+                  child: Column(
+                    children: [
+                      ElevatedButton(
+                        onPressed: !_socketIOConnected
+                            ? _connectSocketIO
+                            : _disconnectSocketIO,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              _socketIOConnected ? Colors.red : Colors.blue,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(_socketIOConnected
+                            ? 'Disconnect IO'
+                            : 'Connect IO'),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: _isConnected ? _sendRealMessage : null,
-                    child: const Text('Send Real Msg'),
+                  child: Column(
+                    children: [
+                      ElevatedButton(
+                        onPressed: !_webSocketConnected
+                            ? _connectWebSocket
+                            : _disconnectWebSocket,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              _webSocketConnected ? Colors.red : Colors.green,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text(_webSocketConnected
+                            ? 'Disconnect WS'
+                            : 'Connect WS'),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -205,17 +408,88 @@ class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
 
             const SizedBox(height: 16),
 
-            // Logs
+            // Message Input (only for Socket.IO)
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: const InputDecoration(
+                      hintText: 'Enter test message for Socket.IO...',
+                      border: OutlineInputBorder(),
+                    ),
+                    enabled: _socketIOConnected,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _socketIOConnected ? _sendSocketIOMessage : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Send to IO'),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // Status Summary
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Connection URLs:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '🟦 Socket.IO: http://192.168.100.87:3003',
+                    style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  ),
+                  Text(
+                    '🟩 WebSocket: ws://192.168.100.87:3003/ws',
+                    style: TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Status: ${_socketIOConnected && _webSocketConnected ? '✅ Both Connected' : _socketIOConnected ? '🟦 Only Socket.IO' : _webSocketConnected ? '🟩 Only WebSocket' : '❌ Both Disconnected'}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _socketIOConnected && _webSocketConnected
+                          ? Colors.green[700]
+                          : (_socketIOConnected || _webSocketConnected)
+                              ? Colors.orange[700]
+                              : Colors.red[700],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Logs Header
             const Text(
-              'Logs:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              'Connection Logs:',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
+
+            // Logs Display
             Expanded(
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
+                  border: Border.all(color: Colors.grey[300]!),
                   borderRadius: BorderRadius.circular(8),
                   color: Colors.grey[50],
                 ),
@@ -229,13 +503,22 @@ class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
                     : ListView.builder(
                         itemCount: _logs.length,
                         itemBuilder: (context, index) {
+                          final log = _logs[index];
                           return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            padding: const EdgeInsets.symmetric(vertical: 1),
                             child: Text(
-                              _logs[index],
-                              style: const TextStyle(
-                                fontSize: 12,
+                              log,
+                              style: TextStyle(
+                                fontSize: 11,
                                 fontFamily: 'monospace',
+                                color: log.contains('🟦')
+                                    ? Colors.blue[700]
+                                    : log.contains('🟩')
+                                        ? Colors.green[700]
+                                        : log.contains('Error') ||
+                                                log.contains('Failed')
+                                            ? Colors.red[700]
+                                            : Colors.black87,
                               ),
                             ),
                           );
@@ -254,7 +537,7 @@ class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
                 });
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey,
+                backgroundColor: Colors.grey[600],
                 foregroundColor: Colors.white,
               ),
               child: const Text('Clear Logs'),
@@ -265,20 +548,13 @@ class _SocketIOTestScreenState extends State<SocketIOTestScreen> {
     );
   }
 
-  Future<void> _connectTest() async {
-    _addLog('Attempting to connect to Socket.IO in TEST MODE (no auth)...');
+  // And add this method to your test screen:
+  Future<void> _testMessageSending() async {
+    _addLog('🧪 Testing message sending...');
     try {
-      await _socketService.connectTest();
-
-      // Wait a moment for connection
-      await Future.delayed(const Duration(seconds: 2));
-
-      _updateConnectionStatus();
-      _addLog(_isConnected
-          ? 'Test connection successful!'
-          : 'Test connection failed');
+      await SimpleSocketTest.testMessageSending();
     } catch (e) {
-      _addLog('Test connection error: $e');
+      _addLog('❌ Message test error: $e');
     }
   }
 
