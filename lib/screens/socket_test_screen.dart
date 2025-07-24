@@ -138,9 +138,30 @@ class _DualConnectionTestScreenState extends State<DualConnectionTestScreen> {
   Future<void> _testWebSocketTransport() async {
     _addLog('🧪 Testing WebSocket transport...');
     try {
-      await SimpleSocketTest.testWithWebSocketTransport();
+      await SimpleSocketTest.testAuthenticatedMessageSending();
     } catch (e) {
       _addLog('❌ WebSocket transport test error: $e');
+    }
+  }
+
+  // Test message sending
+  Future<void> _testMessageSending() async {
+    _addLog('🧪 Testing message sending...');
+    try {
+      await SimpleSocketTest.testMessageSending();
+    } catch (e) {
+      _addLog('❌ Message test error: $e');
+    }
+  }
+
+  // 🔥 NEW: Add debug connection test
+  Future<void> _debugSocketIOConnection() async {
+    _addLog('🔍 Debug: Testing raw Socket.IO connection...');
+    try {
+      // Test if we can even establish a basic engine connection
+      await SimpleSocketTest.testAuthenticatedConnection();
+    } catch (e) {
+      _addLog('❌ Debug test error: $e');
     }
   }
 
@@ -307,8 +328,11 @@ class _DualConnectionTestScreenState extends State<DualConnectionTestScreen> {
                         )),
                   ),
                 ),
-                const SizedBox(width: 4),
-                // 🔥 NEW: Add message test button
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _testMessageSending,
@@ -320,6 +344,24 @@ class _DualConnectionTestScreenState extends State<DualConnectionTestScreen> {
                           color: Colors.white,
                         )),
                   ),
+                ),
+                const SizedBox(width: 4),
+                // 🔥 NEW: Debug button
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _debugSocketIOConnection,
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red[700]),
+                    child: const Text('Debug IO',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                        )),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Container(), // Spacer for alignment
                 ),
               ],
             ),
@@ -546,16 +588,6 @@ class _DualConnectionTestScreenState extends State<DualConnectionTestScreen> {
         ),
       ),
     );
-  }
-
-  // And add this method to your test screen:
-  Future<void> _testMessageSending() async {
-    _addLog('🧪 Testing message sending...');
-    try {
-      await SimpleSocketTest.testMessageSending();
-    } catch (e) {
-      _addLog('❌ Message test error: $e');
-    }
   }
 
   @override
