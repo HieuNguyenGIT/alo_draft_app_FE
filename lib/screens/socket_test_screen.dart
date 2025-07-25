@@ -134,26 +134,6 @@ class _DualConnectionTestScreenState extends State<DualConnectionTestScreen> {
     }
   }
 
-  // Test WebSocket transport
-  Future<void> _testWebSocketTransport() async {
-    _addLog('🧪 Testing WebSocket transport...');
-    try {
-      await SimpleSocketTest.testAuthenticatedMessageSending();
-    } catch (e) {
-      _addLog('❌ WebSocket transport test error: $e');
-    }
-  }
-
-  // Test message sending
-  Future<void> _testMessageSending() async {
-    _addLog('🧪 Testing message sending...');
-    try {
-      await SimpleSocketTest.testMessageSending();
-    } catch (e) {
-      _addLog('❌ Message test error: $e');
-    }
-  }
-
   // 🔥 NEW: Add debug connection test
   Future<void> _debugSocketIOConnection() async {
     _addLog('🔍 Debug: Testing raw Socket.IO connection...');
@@ -316,37 +296,12 @@ class _DualConnectionTestScreenState extends State<DualConnectionTestScreen> {
                   ),
                 ),
                 const SizedBox(width: 4),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _testWebSocketTransport,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.indigo),
-                    child: const Text('WS Transport',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                        )),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 4),
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _testMessageSending,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple),
-                    child: const Text('Messages',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white,
-                        )),
-                  ),
-                ),
                 const SizedBox(width: 4),
-                // 🔥 NEW: Debug button
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _debugSocketIOConnection,

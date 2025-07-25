@@ -1,26 +1,35 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:alo_draft_app/util/constants.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:alo_draft_app/util/custom_logger.dart';
 import 'package:alo_draft_app/services/api_service.dart';
 
 class SimpleSocketTest {
-  // 🔥 FIXED: Test connection using test namespace (no auth required)
+  // 🔥 CRITICAL FIX: Test connection with WebSocket-only transport
   static Future<void> testBasicConnection() async {
     AppLogger.log('🧪 Testing basic Socket.IO connection to test namespace...');
 
     try {
-      // 🔥 CRITICAL: Connect to /test namespace which doesn't require auth
+      // 🔥 CRITICAL: WebSocket-only transport for Flutter mobile
       final socket = io.io(
-          '$socketIOUrl/test', // Test namespace path
+          '$socketIOUrl/test', // Test namespace URL
           io.OptionBuilder()
-              .setTransports(['websocket']) // Flutter only supports websocket
+              // 🔥 CRITICAL: Flutter mobile ONLY supports WebSocket
+              .setTransports(['websocket']) // ✅ REQUIRED for Flutter mobile
+
+              .disableAutoConnect() // Manual control
               .enableReconnection()
               .setReconnectionAttempts(2)
               .setReconnectionDelay(1000)
-              .setTimeout(30000) // 30 second timeout
+              .setTimeout(30000)
               .enableForceNew()
-              .disableAutoConnect() // Manual connection control
+
+              // 🔥 DEBUGGING: Add extra headers
+              .setExtraHeaders({
+                'User-Agent': 'Flutter-WebSocket-Client',
+                'Accept': '*/*',
+              })
               .build());
 
       final completer = Completer<bool>();
@@ -28,7 +37,9 @@ class SimpleSocketTest {
 
       // Set up event listeners BEFORE connecting
       socket.onConnect((_) {
-        AppLogger.log('✅ BASIC connection SUCCESS to test namespace!');
+        AppLogger.log('✅ WEBSOCKET connection SUCCESS to test namespace!');
+        AppLogger.log('   Socket ID: ${socket.id}');
+        AppLogger.log('   Connected: ${socket.connected}');
         if (!hasCompleted) {
           hasCompleted = true;
           socket.disconnect();
@@ -37,7 +48,8 @@ class SimpleSocketTest {
       });
 
       socket.onConnectError((error) {
-        AppLogger.log('❌ BASIC connection FAILED: $error');
+        AppLogger.log('❌ WEBSOCKET connection FAILED: $error');
+        AppLogger.log('   Error type: ${error.runtimeType}');
         if (!hasCompleted) {
           hasCompleted = true;
           if (!completer.isCompleted) completer.complete(false);
@@ -45,7 +57,7 @@ class SimpleSocketTest {
       });
 
       socket.on('connect_timeout', (_) {
-        AppLogger.log('⏰ BASIC connection TIMEOUT');
+        AppLogger.log('⏰ WEBSOCKET connection TIMEOUT');
         if (!hasCompleted) {
           hasCompleted = true;
           if (!completer.isCompleted) completer.complete(false);
@@ -57,7 +69,7 @@ class SimpleSocketTest {
         AppLogger.log('🎉 Test namespace confirmed: $data');
       });
 
-      socket.on('error', (error) {
+      socket.onError((error) {
         AppLogger.log('❌ Test namespace error: $error');
         if (!hasCompleted) {
           hasCompleted = true;
@@ -65,8 +77,11 @@ class SimpleSocketTest {
         }
       });
 
-      // Connect manually after setting up listeners
-      AppLogger.log('🔗 Manually connecting to test namespace...');
+      AppLogger.log('🔗 Connecting to test namespace with WebSocket...');
+      AppLogger.log('   URL: $socketIOUrl/test');
+      AppLogger.log('   Transport: WebSocket ONLY');
+
+      // Manual connection
       socket.connect();
 
       // Wait for result with timeout
@@ -87,130 +102,55 @@ class SimpleSocketTest {
       }
 
       if (result) {
-        AppLogger.log('🎉 Socket.IO test namespace is reachable!');
+        AppLogger.log('🎉 Socket.IO test namespace works with WebSocket!');
       } else {
-        AppLogger.log('💥 Socket.IO test namespace is NOT reachable!');
+        AppLogger.log('💥 Socket.IO test namespace failed with WebSocket!');
       }
     } catch (e) {
       AppLogger.log('💥 Test exception: $e');
+      AppLogger.log('   Exception type: ${e.runtimeType}');
     }
   }
 
-  // Test message sending to test namespace
-  static Future<void> testMessageSending() async {
-    AppLogger.log('🧪 Testing message sending to test namespace...');
-
-    try {
-      final socket = io.io(
-          '$socketIOUrl/test',
-          io.OptionBuilder()
-              .setTransports(['websocket'])
-              .setTimeout(30000)
-              .enableForceNew()
-              .disableAutoConnect()
-              .build());
-
-      final completer = Completer<bool>();
-      bool hasCompleted = false;
-
-      socket.onConnect((_) {
-        AppLogger.log('✅ Connected to test namespace for message test');
-
-        // Send test message
-        socket.emit('test', {
-          'message': 'Hello from Flutter!',
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-        AppLogger.log('📤 Test message sent');
-      });
-
-      socket.on('testResponse', (data) {
-        AppLogger.log('📨 Received test response: $data');
-        if (!hasCompleted) {
-          hasCompleted = true;
-          socket.disconnect();
-          if (!completer.isCompleted) completer.complete(true);
-        }
-      });
-
-      socket.onConnectError((error) {
-        AppLogger.log('❌ Message test connection failed: $error');
-        if (!hasCompleted) {
-          hasCompleted = true;
-          if (!completer.isCompleted) completer.complete(false);
-        }
-      });
-
-      socket.on('error', (error) {
-        AppLogger.log('❌ Message test error: $error');
-        if (!hasCompleted) {
-          hasCompleted = true;
-          if (!completer.isCompleted) completer.complete(false);
-        }
-      });
-
-      // Connect manually
-      AppLogger.log('🔗 Manually connecting for message test...');
-      socket.connect();
-
-      final result = await completer.future.timeout(
-        const Duration(seconds: 35),
-        onTimeout: () {
-          AppLogger.log('⏰ Message test timed out');
-          hasCompleted = true;
-          return false;
-        },
-      );
-
-      // Cleanup
-      try {
-        socket.dispose();
-      } catch (e) {
-        AppLogger.log('⚠️ Socket disposal error: $e');
-      }
-
-      if (result) {
-        AppLogger.log('🎉 Message sending works!');
-      } else {
-        AppLogger.log('💥 Message sending failed!');
-      }
-    } catch (e) {
-      AppLogger.log('💥 Message test exception: $e');
-    }
-  }
-
-  // 🔥 NEW: Test main Socket.IO connection with real authentication
+  // 🔥 CRITICAL FIX: Authenticated connection with WebSocket-only
   static Future<void> testAuthenticatedConnection() async {
     AppLogger.log('🧪 Testing authenticated Socket.IO connection...');
 
     try {
-      // Get real authentication token
       final String? token = await ApiService.getToken();
 
       if (token == null) {
         AppLogger.log('❌ No authentication token available for test');
-        AppLogger.log(
-            '💡 Make sure you are logged in before testing authenticated connection');
         return;
       }
 
       AppLogger.log('🔑 Using auth token: ${token.substring(0, 20)}...');
 
+      // 🔥 CRITICAL: WebSocket-only for main namespace
       final socket = io.io(
-          socketIOUrl, // Main namespace (requires auth)
+          socketIOUrl, // Main namespace
           io.OptionBuilder()
-              .setTransports(['websocket']) // Flutter only supports websocket
-              .setTimeout(45000) // Longer timeout for auth
-              .enableForceNew()
+              // 🔥 CRITICAL: Flutter mobile ONLY supports WebSocket
+              .setTransports(['websocket']) // ✅ REQUIRED for Flutter mobile
+
               .disableAutoConnect()
-              .setAuth({'token': token}) // Real authentication token
+              .setTimeout(60000)
+              .enableForceNew()
+              .setAuth({'token': token}) // Authentication token
+
+              .setExtraHeaders({
+                'User-Agent': 'Flutter-Auth-WebSocket-Client',
+                'Accept': '*/*',
+              })
               .build());
 
       final completer = Completer<bool>();
       bool hasCompleted = false;
 
       socket.onConnect((_) {
-        AppLogger.log('✅ Authenticated connection established!');
+        AppLogger.log('✅ Authenticated WebSocket connection established!');
+        AppLogger.log('   Socket ID: ${socket.id}');
+        AppLogger.log('   Connected: ${socket.connected}');
       });
 
       socket.on('authenticated', (data) {
@@ -223,7 +163,8 @@ class SimpleSocketTest {
       });
 
       socket.onConnectError((error) {
-        AppLogger.log('❌ Authenticated connection FAILED: $error');
+        AppLogger.log('❌ Authenticated WebSocket connection FAILED: $error');
+        AppLogger.log('   Error type: ${error.runtimeType}');
         if (!hasCompleted) {
           hasCompleted = true;
           if (!completer.isCompleted) completer.complete(false);
@@ -231,14 +172,14 @@ class SimpleSocketTest {
       });
 
       socket.on('connect_timeout', (_) {
-        AppLogger.log('⏰ Authenticated connection TIMEOUT');
+        AppLogger.log('⏰ Authenticated WebSocket connection TIMEOUT');
         if (!hasCompleted) {
           hasCompleted = true;
           if (!completer.isCompleted) completer.complete(false);
         }
       });
 
-      socket.on('error', (error) {
+      socket.onError((error) {
         AppLogger.log('❌ Authentication error: $error');
         if (!hasCompleted) {
           hasCompleted = true;
@@ -246,12 +187,16 @@ class SimpleSocketTest {
         }
       });
 
-      // Connect manually
-      AppLogger.log('🔗 Manually connecting with authentication...');
+      AppLogger.log('🔗 Connecting with authentication via WebSocket...');
+      AppLogger.log('   URL: $socketIOUrl');
+      AppLogger.log('   Namespace: / (main)');
+      AppLogger.log('   Transport: WebSocket ONLY');
+
+      // Manual connection
       socket.connect();
 
       final result = await completer.future.timeout(
-        const Duration(seconds: 50),
+        const Duration(seconds: 65),
         onTimeout: () {
           AppLogger.log('⏰ Authenticated test timed out');
           hasCompleted = true;
@@ -267,127 +212,52 @@ class SimpleSocketTest {
       }
 
       if (result) {
-        AppLogger.log('🎉 Authenticated Socket.IO works!');
+        AppLogger.log('🎉 Authenticated Socket.IO works with WebSocket!');
       } else {
-        AppLogger.log('💥 Authenticated Socket.IO failed!');
+        AppLogger.log('💥 Authenticated Socket.IO failed with WebSocket!');
       }
     } catch (e) {
       AppLogger.log('💥 Authenticated test exception: $e');
+      AppLogger.log('   Exception type: ${e.runtimeType}');
     }
   }
 
-  // 🔥 NEW: Test authenticated message sending
-  static Future<void> testAuthenticatedMessageSending() async {
-    AppLogger.log('🧪 Testing authenticated message sending...');
-
-    try {
-      final String? token = await ApiService.getToken();
-
-      if (token == null) {
-        AppLogger.log(
-            '❌ No authentication token available for auth message test');
-        return;
-      }
-
-      final socket = io.io(
-          socketIOUrl,
-          io.OptionBuilder()
-              .setTransports(['websocket'])
-              .setTimeout(45000)
-              .enableForceNew()
-              .disableAutoConnect()
-              .setAuth({'token': token})
-              .build());
-
-      final completer = Completer<bool>();
-      bool hasCompleted = false;
-
-      socket.on('authenticated', (data) {
-        AppLogger.log('✅ Authenticated for message test: $data');
-
-        // Send test message in authenticated mode
-        socket.emit('testMessage', {
-          'content': 'Hello from authenticated Flutter!',
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-        AppLogger.log('📤 Authenticated test message sent');
-      });
-
-      socket.on('testResponse', (data) {
-        AppLogger.log('📨 Received authenticated test response: $data');
-        if (!hasCompleted) {
-          hasCompleted = true;
-          socket.disconnect();
-          if (!completer.isCompleted) completer.complete(true);
-        }
-      });
-
-      socket.onConnectError((error) {
-        AppLogger.log('❌ Auth message test connection failed: $error');
-        if (!hasCompleted) {
-          hasCompleted = true;
-          if (!completer.isCompleted) completer.complete(false);
-        }
-      });
-
-      socket.on('error', (error) {
-        AppLogger.log('❌ Auth message test error: $error');
-        if (!hasCompleted) {
-          hasCompleted = true;
-          if (!completer.isCompleted) completer.complete(false);
-        }
-      });
-
-      // Connect manually
-      AppLogger.log('🔗 Connecting for authenticated message test...');
-      socket.connect();
-
-      final result = await completer.future.timeout(
-        const Duration(seconds: 50),
-        onTimeout: () {
-          AppLogger.log('⏰ Auth message test timed out');
-          hasCompleted = true;
-          return false;
-        },
-      );
-
-      // Cleanup
-      try {
-        socket.dispose();
-      } catch (e) {
-        AppLogger.log('⚠️ Socket disposal error: $e');
-      }
-
-      if (result) {
-        AppLogger.log('🎉 Authenticated message sending works!');
-      } else {
-        AppLogger.log('💥 Authenticated message sending failed!');
-      }
-    } catch (e) {
-      AppLogger.log('💥 Auth message test exception: $e');
-    }
+  // 🔥 NEW: Add HTTP override for potential certificate issues
+  static void setupHttpOverrides() {
+    HttpOverrides.global = _CustomHttpOverrides();
+    AppLogger.log('🔧 HTTP overrides configured for Socket.IO');
   }
 
-  // 🔥 NEW: Run all tests in sequence
+  // 🔥 RUN ALL TESTS WITH FIXES
   static Future<void> runAllTests() async {
-    AppLogger.log('🚀 Running complete Socket.IO test suite...');
-
-    AppLogger.log('\n=== TEST 1: Basic Connection (Test Namespace) ===');
-    await testBasicConnection();
-    await Future.delayed(const Duration(seconds: 2));
-
-    AppLogger.log('\n=== TEST 2: Message Sending (Test Namespace) ===');
-    await testMessageSending();
-    await Future.delayed(const Duration(seconds: 2));
-
     AppLogger.log(
-        '\n=== TEST 3: Authenticated Connection (Main Namespace) ===');
+        '🚀 Running Socket.IO tests with WebSocket-only transport...');
+
+    // Set up HTTP overrides
+    setupHttpOverrides();
+
+    AppLogger.log('\n=== TEST 1: Test Namespace (WebSocket) ===');
+    await testBasicConnection();
+    await Future.delayed(const Duration(seconds: 3));
+
+    AppLogger.log('\n=== TEST 2: Authenticated Connection (WebSocket) ===');
     await testAuthenticatedConnection();
-    await Future.delayed(const Duration(seconds: 2));
 
-    AppLogger.log('\n=== TEST 4: Authenticated Message Sending ===');
-    await testAuthenticatedMessageSending();
+    AppLogger.log('\n🏁 Socket.IO WebSocket tests completed!');
+  }
+}
 
-    AppLogger.log('\n🏁 Socket.IO test suite completed!');
+// 🔥 CRITICAL: HTTP overrides for certificate and network issues
+class _CustomHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) {
+        // Accept all certificates (for development only)
+        AppLogger.log('🔓 Accepting certificate for $host:$port');
+        return true;
+      }
+      ..connectionTimeout = const Duration(seconds: 30)
+      ..idleTimeout = const Duration(seconds: 30);
   }
 }

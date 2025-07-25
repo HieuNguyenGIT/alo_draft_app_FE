@@ -21,7 +21,7 @@ class SocketIOService {
 
   bool get isConnected => _isConnected && (_isAuthenticated || _isTestMode);
 
-  // 🔥 FIXED: Main namespace connection with proper auth
+// 🔥 FIXED: Main namespace connection with WebSocket-only
   Future<void> connect() async {
     if (_isConnected) {
       AppLogger.log('🔌 Socket.IO already connected');
@@ -38,29 +38,36 @@ class SocketIOService {
           '🌐 Socket.IO connecting to MAIN namespace: $socketIOUrl (WITH AUTH)');
       AppLogger.log('🔑 Using token: ${token.substring(0, 20)}...');
 
-      // 🔥 CRITICAL: Optimized configuration for Flutter
       _socket = io.io(
           socketIOUrl, // Main namespace
           io.OptionBuilder()
-              .setTransports(['websocket']) // Flutter only supports websocket
+              // 🔥 CRITICAL FIX: WebSocket ONLY for Flutter mobile
+              .setTransports(['websocket']) // ✅ REQUIRED: No polling on mobile
+
+              .enableAutoConnect() // Let Socket.IO handle timing
               .enableReconnection()
-              .setReconnectionAttempts(3)
-              .setReconnectionDelay(2000)
-              .setTimeout(45000) // 45 second timeout
+              .setReconnectionAttempts(5)
+              .setReconnectionDelay(1000)
+              .setReconnectionDelayMax(5000)
+              .setTimeout(60000) // 60 second timeout
               .enableForceNew()
-              .disableAutoConnect() // Manual connection control
-              .setAuth({'token': token}) // Authentication token
+              .setAuth({'token': token}) // Authentication
+
+              .setExtraHeaders({
+                'User-Agent': 'Flutter-SocketIO-Mobile',
+                'Accept': '*/*',
+              })
               .build());
 
       _isTestMode = false;
       _setupEventHandlers();
 
-      AppLogger.log('🔗 Manually connecting to main namespace...');
-      _socket!.connect();
+      AppLogger.log(
+          '🔗 Socket.IO auto-connecting to main namespace (WebSocket only)...');
 
-      // Wait for authentication with proper timeout
-      await _waitForAuthentication(timeout: 45000);
-      AppLogger.log('✅ Socket.IO successfully connected and authenticated!');
+      // Wait for authentication
+      await _waitForAuthentication(timeout: 60000);
+      AppLogger.log('✅ Socket.IO successfully connected via WebSocket!');
     } catch (e) {
       AppLogger.log('❌ Socket.IO connection error: $e');
       _cleanup();
@@ -68,7 +75,7 @@ class SocketIOService {
     }
   }
 
-  // 🔥 FIXED: Test namespace connection (no auth)
+// 🔥 FIXED: Test namespace with WebSocket-only
   Future<void> connectTest() async {
     if (_isConnected) {
       AppLogger.log('🔌 Socket.IO already connected');
@@ -76,32 +83,31 @@ class SocketIOService {
     }
 
     try {
-      AppLogger.log(
-          '🌐 Socket.IO connecting to TEST namespace: $socketIOUrl/test (NO AUTH)');
+      AppLogger.log('🌐 Socket.IO connecting to TEST namespace (NO AUTH)');
 
-      // 🔥 CRITICAL: Test namespace configuration
       _socket = io.io(
-          '$socketIOUrl/test', // Test namespace
+          '$socketIOUrl/test', // ✅ CORRECT: Test namespace URL
           io.OptionBuilder()
-              .setTransports(['websocket']) // Flutter only supports websocket
+              // 🔥 CRITICAL FIX: WebSocket ONLY for Flutter mobile
+              .setTransports(['websocket']) // ✅ REQUIRED: No polling on mobile
+
+              .enableAutoConnect()
               .enableReconnection()
-              .setReconnectionAttempts(2)
+              .setReconnectionAttempts(3)
               .setReconnectionDelay(1000)
-              .setTimeout(30000) // 30 second timeout for test
+              .setTimeout(30000)
               .enableForceNew()
-              .disableAutoConnect() // Manual connection control
-              // NO auth for test mode
               .build());
 
       _isTestMode = true;
       _setupEventHandlers();
 
-      AppLogger.log('🔗 Manually connecting to test namespace...');
-      _socket!.connect();
+      AppLogger.log(
+          '🔗 Socket.IO auto-connecting to test namespace (WebSocket only)...');
 
       // Wait for test connection
       await _waitForConnection(timeout: 30000);
-      AppLogger.log('✅ Socket.IO test connection successful!');
+      AppLogger.log('✅ Socket.IO test connection successful via WebSocket!');
     } catch (e) {
       AppLogger.log('❌ Socket.IO test connection error: $e');
       _cleanup();
@@ -109,15 +115,20 @@ class SocketIOService {
     }
   }
 
-  // 🔥 ENHANCED: Event handler setup with detailed logging
+  // 🔥 ENHANCED: Event handler setup with transport debugging
   void _setupEventHandlers() {
     if (_socket == null) return;
 
     AppLogger.log('🔧 Setting up Socket.IO event handlers...');
 
-    _socket!.onConnect((_) {
-      AppLogger.log('✅ Socket.IO engine connected successfully');
+    // 🔥 NEW: Transport-specific debugging
+    _socket!.on('connect', (_) {
+      AppLogger.log('✅ Socket.IO connected successfully');
+      AppLogger.log(
+          '   Transport: ${_socket!.io.engine?.transport?.name ?? "unknown"}');
+      AppLogger.log('   Socket ID: ${_socket!.id}');
       _isConnected = true;
+
       if (_isTestMode) {
         AppLogger.log('🧪 Connected in TEST MODE');
         // Test mode considers authenticated immediately on connect
@@ -125,13 +136,19 @@ class SocketIOService {
       }
     });
 
-    _socket!.onDisconnect((reason) {
+    // 🔥 IMPORTANT: Handle transport upgrades
+    _socket!.on('upgrade', (_) {
+      AppLogger.log(
+          '⬆️ Socket.IO transport upgraded to: ${_socket!.io.engine?.transport?.name}');
+    });
+
+    _socket!.on('disconnect', (reason) {
       AppLogger.log('🔌 Socket.IO disconnected: $reason');
       _isConnected = false;
       _isAuthenticated = false;
     });
 
-    _socket!.onConnectError((error) {
+    _socket!.on('connect_error', (error) {
       AppLogger.log('❌ Socket.IO connection error: $error');
       _isConnected = false;
       _isAuthenticated = false;
@@ -157,11 +174,6 @@ class SocketIOService {
     });
 
     // Error handling
-    _socket!.on('connect_error', (error) {
-      AppLogger.log('❌ Socket.IO connect_error: $error');
-      _isAuthenticated = false;
-    });
-
     _socket!.on('error', (error) {
       AppLogger.log('❌ Socket.IO general error: $error');
     });
@@ -203,8 +215,8 @@ class SocketIOService {
     AppLogger.log('✅ Event handlers setup complete');
   }
 
-  // 🔥 NEW: Wait for authentication (main namespace)
-  Future<void> _waitForAuthentication({int timeout = 45000}) async {
+  // 🔥 IMPROVED: Wait for authentication with better error handling
+  Future<void> _waitForAuthentication({int timeout = 60000}) async {
     final completer = Completer<void>();
     Timer? timeoutTimer;
     bool hasCompleted = false;
@@ -279,7 +291,7 @@ class SocketIOService {
     }
   }
 
-  // 🔥 NEW: Wait for basic connection (test namespace)
+  // 🔥 IMPROVED: Wait for basic connection
   Future<void> _waitForConnection({int timeout = 30000}) async {
     final completer = Completer<void>();
     Timer? timeoutTimer;
@@ -321,8 +333,8 @@ class SocketIOService {
     }
 
     // Set up temporary listeners
-    _socket!.onConnect(onConnectHandler);
-    _socket!.onConnectError(onErrorHandler);
+    _socket!.on('connect', onConnectHandler);
+    _socket!.on('connect_error', onErrorHandler);
 
     try {
       return await completer.future;
@@ -428,12 +440,12 @@ class SocketIOService {
       'isAuthenticated': _isAuthenticated,
       'isTestMode': _isTestMode,
       'socketId': _socket?.id,
-      'transport': _socket?.connected == true ? 'websocket' : 'disconnected',
+      'transport': _socket?.io.engine?.transport?.name ?? 'disconnected',
       'namespace': _isTestMode ? '/test' : '/',
     };
   }
 
-  // 🔥 NEW: Debug connection status
+  // 🔥 IMPROVED: Debug connection status
   void logConnectionStatus() {
     final info = getConnectionInfo();
     AppLogger.log('🔍 Socket.IO Connection Status:');
