@@ -2,16 +2,16 @@
 const String dockerUrl = 'http://localhost:3000/api';
 const String localrunUrl = 'http://192.168.100.87:3003/api';
 
-const String baseUrl = 'http://192.168.100.87:3003/api'; // HTTP API + WebSocket
+// 🔥 ENSURE: Use the same base URL for both API and Socket.IO
+const String baseUrl = 'http://192.168.100.87:3003/api'; // HTTP API
 const String socketIOUrl =
-    'http://192.168.100.87:3003'; // Socket.IO (WebSocket transport only)
+    'http://192.168.100.87:3003'; // Socket.IO (same server, no /api)
 
-const String socketIOTestUrl =
-    'http://192.168.100.87:3003/test'; // Test namespace
-const String webSocketUrl = 'ws://192.168.100.87:3003/ws'; // Native WebSocket
+// 🔥 DEBUG: Health check URL
+const String healthCheckUrl = 'http://192.168.100.87:3003/health';
 
-const int socketIOTimeout = 45000; // 45 seconds for main connection
-const int socketIOTestTimeout = 30000; // 30 seconds for test connection
-const int webSocketTimeout = 30000; // 30 seconds for WebSocket
+// 🔥 DEBUG: Test URLs
+const String testHttpUrl = 'http://192.168.100.87:3003/api/auth/login';
+const String testSocketUrl = 'http://192.168.100.87:3003/socket.io/';
 
-const bool enableSocketIODebug = true;
+const String env = 'local';

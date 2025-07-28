@@ -3,14 +3,20 @@ import 'package:alo_draft_app/util/constants.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:alo_draft_app/util/custom_logger.dart';
 import 'package:alo_draft_app/services/api_service.dart';
+import 'package:alo_draft_app/models/message_model.dart';
 
 class SocketIOService {
   static SocketIOService? _instance;
-
   io.Socket? _socket;
   bool _isConnected = false;
   bool _isAuthenticated = false;
-  bool _isTestMode = false;
+  int? _currentConversationId;
+  Timer? _typingTimer;
+  Timer? _reconnectTimer;
+
+  // Stream controllers for real-time data
+  StreamController<Message>? _messageController;
+  StreamController<Map<String, dynamic>>? _typingController;
 
   static SocketIOService get instance {
     _instance ??= SocketIOService._internal();
@@ -19,380 +25,259 @@ class SocketIOService {
 
   SocketIOService._internal();
 
-  bool get isConnected => _isConnected && (_isAuthenticated || _isTestMode);
+  bool get isConnected => _isConnected && _isAuthenticated;
 
-// 🔥 FIXED: Main namespace connection with WebSocket-only
+  // Streams for UI to listen to
+  Stream<Message> get messageStream {
+    _messageController ??= StreamController<Message>.broadcast();
+    return _messageController!.stream;
+  }
+
+  Stream<Map<String, dynamic>> get typingStream {
+    _typingController ??= StreamController<Map<String, dynamic>>.broadcast();
+    return _typingController!.stream;
+  }
+
+  // 🔥 CRITICAL FIX: Mobile-optimized connection
   Future<void> connect() async {
-    if (_isConnected) {
-      AppLogger.log('🔌 Socket.IO already connected');
+    if (_isConnected && _isAuthenticated) {
+      AppLogger.log('🔌 Socket.IO already connected and authenticated');
       return;
     }
 
     try {
+      // Get the auth token
       final token = await ApiService.getToken();
       if (token == null) {
         throw Exception('No authentication token available');
       }
 
-      AppLogger.log(
-          '🌐 Socket.IO connecting to MAIN namespace: $socketIOUrl (WITH AUTH)');
+      AppLogger.log('🌐 Socket.IO connecting to: $socketIOUrl');
       AppLogger.log('🔑 Using token: ${token.substring(0, 20)}...');
 
+      // 🔥 CRITICAL FIX: Mobile-optimized configuration
       _socket = io.io(
-          socketIOUrl, // Main namespace
+          socketIOUrl,
           io.OptionBuilder()
-              // 🔥 CRITICAL FIX: WebSocket ONLY for Flutter mobile
-              .setTransports(['websocket']) // ✅ REQUIRED: No polling on mobile
+              // 🔥 FIX: Start with polling for mobile compatibility
+              .setTransports(['websocket'])
 
-              .enableAutoConnect() // Let Socket.IO handle timing
-              .enableReconnection()
-              .setReconnectionAttempts(5)
-              .setReconnectionDelay(1000)
-              .setReconnectionDelayMax(5000)
-              .setTimeout(60000) // 60 second timeout
-              .enableForceNew()
-              .setAuth({'token': token}) // Authentication
+              // 🔥 FIX: Authentication setup
+              .setAuth({'token': token})
+              .setExtraHeaders({'authorization': 'Bearer $token'})
 
-              .setExtraHeaders({
-                'User-Agent': 'Flutter-SocketIO-Mobile',
-                'Accept': '*/*',
-              })
-              .build());
-
-      _isTestMode = false;
-      _setupEventHandlers();
-
-      AppLogger.log(
-          '🔗 Socket.IO auto-connecting to main namespace (WebSocket only)...');
-
-      // Wait for authentication
-      await _waitForAuthentication(timeout: 60000);
-      AppLogger.log('✅ Socket.IO successfully connected via WebSocket!');
-    } catch (e) {
-      AppLogger.log('❌ Socket.IO connection error: $e');
-      _cleanup();
-      rethrow;
-    }
-  }
-
-// 🔥 FIXED: Test namespace with WebSocket-only
-  Future<void> connectTest() async {
-    if (_isConnected) {
-      AppLogger.log('🔌 Socket.IO already connected');
-      return;
-    }
-
-    try {
-      AppLogger.log('🌐 Socket.IO connecting to TEST namespace (NO AUTH)');
-
-      _socket = io.io(
-          '$socketIOUrl/test', // ✅ CORRECT: Test namespace URL
-          io.OptionBuilder()
-              // 🔥 CRITICAL FIX: WebSocket ONLY for Flutter mobile
-              .setTransports(['websocket']) // ✅ REQUIRED: No polling on mobile
-
+              // 🔥 FIX: Connection settings
               .enableAutoConnect()
               .enableReconnection()
-              .setReconnectionAttempts(3)
+              .setReconnectionAttempts(10)
               .setReconnectionDelay(1000)
-              .setTimeout(30000)
+              .setReconnectionDelayMax(5000)
+              .setTimeout(20000)
+
+              // 🔥 FIX: Force new connection
               .enableForceNew()
               .build());
 
-      _isTestMode = true;
       _setupEventHandlers();
 
-      AppLogger.log(
-          '🔗 Socket.IO auto-connecting to test namespace (WebSocket only)...');
-
-      // Wait for test connection
-      await _waitForConnection(timeout: 30000);
-      AppLogger.log('✅ Socket.IO test connection successful via WebSocket!');
+      // Wait for connection with proper timeout
+      await _waitForAuthentication();
     } catch (e) {
-      AppLogger.log('❌ Socket.IO test connection error: $e');
-      _cleanup();
+      AppLogger.log('❌ Socket.IO connection error: $e');
       rethrow;
     }
   }
 
-  // 🔥 ENHANCED: Event handler setup with transport debugging
-  void _setupEventHandlers() {
-    if (_socket == null) return;
+  // 🔥 NEW: Proper authentication waiting
+  Future<void> _waitForAuthentication({int timeoutSeconds = 15}) async {
+    final completer = Completer<void>();
+    Timer? timeoutTimer;
 
-    AppLogger.log('🔧 Setting up Socket.IO event handlers...');
-
-    // 🔥 NEW: Transport-specific debugging
-    _socket!.on('connect', (_) {
-      AppLogger.log('✅ Socket.IO connected successfully');
-      AppLogger.log(
-          '   Transport: ${_socket!.io.engine?.transport?.name ?? "unknown"}');
-      AppLogger.log('   Socket ID: ${_socket!.id}');
-      _isConnected = true;
-
-      if (_isTestMode) {
-        AppLogger.log('🧪 Connected in TEST MODE');
-        // Test mode considers authenticated immediately on connect
-        _isAuthenticated = true;
+    // Set up timeout
+    timeoutTimer = Timer(Duration(seconds: timeoutSeconds), () {
+      if (!completer.isCompleted) {
+        AppLogger.log('⏰ Authentication timeout after $timeoutSeconds seconds');
+        completer.completeError('Authentication timeout');
       }
     });
 
-    // 🔥 IMPORTANT: Handle transport upgrades
-    _socket!.on('upgrade', (_) {
-      AppLogger.log(
-          '⬆️ Socket.IO transport upgraded to: ${_socket!.io.engine?.transport?.name}');
+    // Listen for authentication success
+    void onAuthenticated() {
+      timeoutTimer?.cancel();
+      if (!completer.isCompleted) {
+        AppLogger.log('✅ Authentication successful');
+        completer.complete();
+      }
+    }
+
+    void onError(dynamic error) {
+      timeoutTimer?.cancel();
+      if (!completer.isCompleted) {
+        AppLogger.log('❌ Authentication failed: $error');
+        completer.completeError('Authentication failed: $error');
+      }
+    }
+
+    // Set up one-time listeners
+    StreamSubscription? authSub;
+
+    authSub = Stream.periodic(Duration(milliseconds: 100))
+        .take(timeoutSeconds * 10)
+        .listen((_) {
+      if (_isAuthenticated) {
+        authSub?.cancel();
+        onAuthenticated();
+      }
     });
 
-    _socket!.on('disconnect', (reason) {
+    // Listen for errors
+    _socket?.onConnectError((error) => onError(error));
+
+    try {
+      await completer.future;
+    } finally {
+      timeoutTimer.cancel();
+      authSub.cancel();
+    }
+  }
+
+  void _setupEventHandlers() {
+    if (_socket == null) return;
+
+    // 🔥 FIX: Connection events
+    _socket!.onConnect((_) {
+      AppLogger.log('✅ Socket.IO connected to server');
+      _isConnected = true;
+    });
+
+    _socket!.onDisconnect((reason) {
       AppLogger.log('🔌 Socket.IO disconnected: $reason');
       _isConnected = false;
       _isAuthenticated = false;
+      _currentConversationId = null;
+
+      // 🔥 FIX: Auto-reconnect logic
+      if (reason != 'io client disconnect') {
+        _scheduleReconnect();
+      }
     });
 
-    _socket!.on('connect_error', (error) {
+    _socket!.onConnectError((error) {
       AppLogger.log('❌ Socket.IO connection error: $error');
       _isConnected = false;
       _isAuthenticated = false;
+      _scheduleReconnect();
     });
 
-    // Handle connection timeout
-    _socket!.on('connect_timeout', (_) {
-      AppLogger.log('⏰ Socket.IO connection timeout');
-      _isConnected = false;
+    // 🔥 FIX: Authentication events
+    _socket!.on('authenticated', (data) {
+      AppLogger.log('✅ Socket.IO authenticated: $data');
+      _isAuthenticated = true;
+      _cancelReconnectTimer();
+    });
+
+    // Handle authentication errors
+    _socket!.on('connect_error', (error) {
+      AppLogger.log('❌ Socket.IO authentication error: $error');
       _isAuthenticated = false;
     });
 
-    // 🔥 TEST MODE: Listen for 'connected' event from test namespace
-    _socket!.on('connected', (data) {
-      AppLogger.log('🧪 Socket.IO test namespace confirmed: $data');
-      _isAuthenticated = true;
+    // 🔥 FIX: Message handling
+    _socket!.on('newMessage', (data) {
+      AppLogger.log('📨 Received message: $data');
+      try {
+        final message = Message.fromJson(data as Map<String, dynamic>);
+        _messageController?.add(message);
+        AppLogger.log('📤 Message added to stream: ${message.content}');
+      } catch (e) {
+        AppLogger.log('❌ Error parsing message: $e');
+        AppLogger.log('❌ Raw data: $data');
+      }
     });
 
-    // 🔥 MAIN MODE: Listen for 'authenticated' event from main namespace
-    _socket!.on('authenticated', (data) {
-      AppLogger.log('✅ Socket.IO main namespace authenticated: $data');
-      _isAuthenticated = true;
+    // 🔥 FIX: Typing indicators
+    _socket!.on('userTyping', (data) {
+      AppLogger.log('⌨️ User typing: $data');
+      _typingController?.add({
+        'type': 'typing_start',
+        'userId': data['userId'],
+        'userName': data['userName'],
+        'conversationId': data['conversationId'],
+      });
+    });
+
+    _socket!.on('userStoppedTyping', (data) {
+      AppLogger.log('⌨️ User stopped typing: $data');
+      _typingController?.add({
+        'type': 'typing_stop',
+        'userId': data['userId'],
+        'conversationId': data['conversationId'],
+      });
+    });
+
+    // 🔥 FIX: Conversation events
+    _socket!.on('joinedConversation', (data) {
+      AppLogger.log('🏠 Joined conversation: $data');
+    });
+
+    _socket!.on('messageStatus', (data) {
+      AppLogger.log('📤 Message status: $data');
     });
 
     // Error handling
     _socket!.on('error', (error) {
-      AppLogger.log('❌ Socket.IO general error: $error');
+      AppLogger.log('❌ Socket.IO error: $error');
     });
-
-    // Message handlers
-    _socket!.on('testResponse', (data) {
-      AppLogger.log('🧪 Socket.IO test response: $data');
-    });
-
-    _socket!.on('newMessage', (data) {
-      AppLogger.log('📨 Socket.IO new message: $data');
-    });
-
-    _socket!.on('joinedConversation',
-        (data) => {AppLogger.log('🏠 Socket.IO joined conversation: $data')});
-
-    _socket!.on('messageStatus',
-        (data) => {AppLogger.log('📤 Socket.IO message status: $data')});
-
-    _socket!.on('userTyping',
-        (data) => {AppLogger.log('⌨️ Socket.IO user typing: $data')});
-
-    _socket!.on('userStoppedTyping',
-        (data) => {AppLogger.log('⌨️ Socket.IO user stopped typing: $data')});
-
-    // Reconnection events
-    _socket!.on('reconnect', (attemptNumber) {
-      AppLogger.log('🔄 Socket.IO reconnected after $attemptNumber attempts');
-    });
-
-    _socket!.on('reconnect_attempt', (attemptNumber) {
-      AppLogger.log('🔄 Socket.IO reconnection attempt $attemptNumber');
-    });
-
-    _socket!.on('reconnect_failed', (_) {
-      AppLogger.log('❌ Socket.IO reconnection failed');
-    });
-
-    AppLogger.log('✅ Event handlers setup complete');
   }
 
-  // 🔥 IMPROVED: Wait for authentication with better error handling
-  Future<void> _waitForAuthentication({int timeout = 60000}) async {
-    final completer = Completer<void>();
-    Timer? timeoutTimer;
-    bool hasCompleted = false;
+  // 🔥 NEW: Smart reconnection logic
+  void _scheduleReconnect() {
+    _cancelReconnectTimer();
 
-    AppLogger.log('⏳ Waiting for authentication...');
-
-    // Set up timeout
-    timeoutTimer = Timer(Duration(milliseconds: timeout), () {
-      if (!hasCompleted) {
-        hasCompleted = true;
-        if (!completer.isCompleted) {
-          completer.completeError('Authentication timeout after ${timeout}ms');
-        }
-      }
-    });
-
-    // Create temporary event handlers
-    void onAuthenticatedHandler(data) {
-      AppLogger.log('🎉 Authentication confirmed: $data');
-      timeoutTimer?.cancel();
-      if (!hasCompleted) {
-        hasCompleted = true;
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-      }
-    }
-
-    void onErrorHandler(error) {
-      AppLogger.log('❌ Authentication error: $error');
-      timeoutTimer?.cancel();
-      if (!hasCompleted) {
-        hasCompleted = true;
-        if (!completer.isCompleted) {
-          completer.completeError('Authentication failed: $error');
-        }
-      }
-    }
-
-    void onConnectErrorHandler(error) {
-      AppLogger.log('❌ Connection error during auth: $error');
-      timeoutTimer?.cancel();
-      if (!hasCompleted) {
-        hasCompleted = true;
-        if (!completer.isCompleted) {
-          completer.completeError('Connection error: $error');
-        }
-      }
-    }
-
-    // Listen for the appropriate events based on mode
-    if (_isTestMode) {
-      _socket!.on('connected', onAuthenticatedHandler);
-    } else {
-      _socket!.on('authenticated', onAuthenticatedHandler);
-    }
-    _socket!.on('connect_error', onConnectErrorHandler);
-    _socket!.on('error', onErrorHandler);
-
-    try {
-      return await completer.future;
-    } finally {
-      // Clean up temporary listeners
-      if (_isTestMode) {
-        _socket!.off('connected', onAuthenticatedHandler);
-      } else {
-        _socket!.off('authenticated', onAuthenticatedHandler);
-      }
-      _socket!.off('connect_error', onConnectErrorHandler);
-      _socket!.off('error', onErrorHandler);
-      timeoutTimer.cancel();
-    }
-  }
-
-  // 🔥 IMPROVED: Wait for basic connection
-  Future<void> _waitForConnection({int timeout = 30000}) async {
-    final completer = Completer<void>();
-    Timer? timeoutTimer;
-    bool hasCompleted = false;
-
-    AppLogger.log('⏳ Waiting for basic connection...');
-
-    // Set up timeout
-    timeoutTimer = Timer(Duration(milliseconds: timeout), () {
-      if (!hasCompleted) {
-        hasCompleted = true;
-        if (!completer.isCompleted) {
-          completer.completeError('Connection timeout after ${timeout}ms');
-        }
-      }
-    });
-
-    // Create temporary event handlers
-    void onConnectHandler(_) {
-      AppLogger.log('🎉 Basic connection established');
-      timeoutTimer?.cancel();
-      if (!hasCompleted) {
-        hasCompleted = true;
-        if (!completer.isCompleted) {
-          completer.complete();
-        }
-      }
-    }
-
-    void onErrorHandler(error) {
-      AppLogger.log('❌ Connection error: $error');
-      timeoutTimer?.cancel();
-      if (!hasCompleted) {
-        hasCompleted = true;
-        if (!completer.isCompleted) {
-          completer.completeError('Connection error: $error');
-        }
-      }
-    }
-
-    // Set up temporary listeners
-    _socket!.on('connect', onConnectHandler);
-    _socket!.on('connect_error', onErrorHandler);
-
-    try {
-      return await completer.future;
-    } finally {
-      // Clean up temporary listeners
-      _socket!.off('connect', onConnectHandler);
-      _socket!.off('connect_error', onErrorHandler);
-      timeoutTimer.cancel();
-    }
-  }
-
-  // Send test message (works in both modes)
-  void sendTestMessage(String message) {
-    if (!isConnected) {
-      AppLogger.log(
-          '❌ Cannot send test message: Socket not connected or authenticated');
-      return;
-    }
-
-    try {
-      if (_isTestMode) {
-        // Use 'test' event for test mode
-        _socket!.emit('test', {
-          'message': message,
-          'timestamp': DateTime.now().toIso8601String(),
+    _reconnectTimer = Timer(Duration(seconds: 3), () {
+      if (!_isConnected) {
+        AppLogger.log('🔄 Attempting to reconnect...');
+        connect().catchError((e) {
+          AppLogger.log('❌ Reconnection failed: $e');
         });
-        AppLogger.log('📤 Test message sent (test mode): $message');
-      } else {
-        // Use 'testMessage' event for authenticated mode
-        _socket!.emit('testMessage', {
-          'content': message,
-          'timestamp': DateTime.now().toIso8601String(),
-        });
-        AppLogger.log('📤 Test message sent (auth mode): $message');
       }
-    } catch (e) {
-      AppLogger.log('❌ Error sending test message: $e');
-    }
+    });
   }
 
-  // Join a conversation (only works in authenticated mode)
+  void _cancelReconnectTimer() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
+  }
+
+  // 🔥 FIX: Enhanced conversation management
   void joinConversation(int conversationId) {
     if (!isConnected) {
-      AppLogger.log('❌ Cannot join conversation: Socket not connected');
+      AppLogger.log('❌ Cannot join conversation: Not connected/authenticated');
       return;
     }
 
-    if (_isTestMode) {
-      AppLogger.log(
-          '❌ Cannot join conversation: Test mode does not support conversations');
-      return;
+    // Leave current conversation if any
+    if (_currentConversationId != null &&
+        _currentConversationId != conversationId) {
+      leaveConversation();
     }
 
+    _currentConversationId = conversationId;
     _socket!.emit('joinConversation', conversationId);
     AppLogger.log('🏠 Joining conversation: $conversationId');
   }
 
-  // Send a real message (only works in authenticated mode)
+  void leaveConversation() {
+    if (!isConnected) return;
+
+    if (_currentConversationId != null) {
+      _socket!.emit('leaveConversation');
+      AppLogger.log('🚪 Left conversation: $_currentConversationId');
+      _currentConversationId = null;
+    }
+  }
+
+  // 🔥 FIX: Message sending
   void sendMessage({
     required int conversationId,
     required String content,
@@ -400,85 +285,97 @@ class SocketIOService {
     String? temporaryId,
   }) {
     if (!isConnected) {
-      AppLogger.log('❌ Cannot send message: Socket not connected');
+      AppLogger.log('❌ Cannot send message: Not connected/authenticated');
       return;
     }
 
-    if (_isTestMode) {
-      AppLogger.log(
-          '❌ Cannot send message: Test mode does not support real messages');
-      return;
-    }
-
-    _socket!.emit('sendMessage', {
+    final messageData = {
       'conversationId': conversationId,
       'content': content,
       'messageType': messageType,
       if (temporaryId != null) 'temporaryId': temporaryId,
-    });
+    };
 
-    AppLogger.log('📤 Message sent to conversation $conversationId: $content');
+    _socket!.emit('sendMessage', messageData);
+    AppLogger.log('📤 Message sent: $content');
   }
 
-  // Typing indicators (only works in authenticated mode)
+  // 🔥 FIX: Typing indicators
   void startTyping(int conversationId) {
-    if (!isConnected || _isTestMode) return;
+    if (!isConnected) return;
+
     _socket!.emit('startTyping', conversationId);
-    AppLogger.log('⌨️ Started typing in conversation $conversationId');
+    AppLogger.log('⌨️ Started typing in: $conversationId');
+
+    // Auto-stop typing after 3 seconds
+    _typingTimer?.cancel();
+    _typingTimer = Timer(Duration(seconds: 3), () {
+      stopTyping(conversationId);
+    });
   }
 
   void stopTyping(int conversationId) {
-    if (!isConnected || _isTestMode) return;
+    if (!isConnected) return;
+
     _socket!.emit('stopTyping', conversationId);
-    AppLogger.log('⌨️ Stopped typing in conversation $conversationId');
+    _typingTimer?.cancel();
   }
 
-  // Get connection info for debugging
-  Map<String, dynamic> getConnectionInfo() {
-    return {
-      'isConnected': _isConnected,
-      'isAuthenticated': _isAuthenticated,
-      'isTestMode': _isTestMode,
-      'socketId': _socket?.id,
-      'transport': _socket?.io.engine?.transport?.name ?? 'disconnected',
-      'namespace': _isTestMode ? '/test' : '/',
-    };
+  // 🔥 FIX: Test functionality
+  void sendTestMessage(String message) {
+    if (!isConnected) {
+      AppLogger.log('❌ Cannot send test message: Not connected');
+      return;
+    }
+
+    _socket!.emit('testMessage', {
+      'content': message,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+    AppLogger.log('📤 Test message sent: $message');
   }
 
-  // 🔥 IMPROVED: Debug connection status
-  void logConnectionStatus() {
-    final info = getConnectionInfo();
-    AppLogger.log('🔍 Socket.IO Connection Status:');
-    AppLogger.log('   Connected: ${info['isConnected']}');
-    AppLogger.log('   Authenticated: ${info['isAuthenticated']}');
-    AppLogger.log('   Test Mode: ${info['isTestMode']}');
-    AppLogger.log('   Socket ID: ${info['socketId']}');
-    AppLogger.log('   Transport: ${info['transport']}');
-    AppLogger.log('   Namespace: ${info['namespace']}');
+  // 🔥 FIX: Connection check
+  bool checkConnection() {
+    final socketConnected = _socket?.connected ?? false;
+    final serviceConnected = _isConnected && _isAuthenticated;
+
+    AppLogger.log('🔍 Connection status:');
+    AppLogger.log('   Socket connected: $socketConnected');
+    AppLogger.log('   Service connected: $_isConnected');
+    AppLogger.log('   Authenticated: $_isAuthenticated');
+    AppLogger.log('   Overall status: $serviceConnected');
+
+    return serviceConnected;
   }
 
-  void _cleanup() {
-    _isConnected = false;
-    _isAuthenticated = false;
-    _isTestMode = false;
-  }
-
+  // 🔥 FIX: Clean disconnect
   void disconnect() {
+    AppLogger.log('🔌 Disconnecting Socket.IO...');
+
+    _cancelReconnectTimer();
+    _typingTimer?.cancel();
+
     if (_socket != null) {
-      AppLogger.log('🔌 Disconnecting Socket.IO...');
-      try {
-        _socket!.disconnect();
-        _socket!.dispose();
-      } catch (e) {
-        AppLogger.log('⚠️ Error during Socket.IO cleanup: $e');
-      }
+      _socket!.disconnect();
+      _socket!.dispose();
       _socket = null;
     }
-    _cleanup();
-    AppLogger.log('✅ Socket.IO disconnected and cleaned up');
+
+    _isConnected = false;
+    _isAuthenticated = false;
+    _currentConversationId = null;
+
+    AppLogger.log('✅ Socket.IO disconnected');
   }
 
+  // 🔥 FIX: Resource cleanup
   void dispose() {
     disconnect();
+    _messageController?.close();
+    _typingController?.close();
+    _messageController = null;
+    _typingController = null;
+    AppLogger.log('♻️ Socket.IO service disposed');
   }
 }

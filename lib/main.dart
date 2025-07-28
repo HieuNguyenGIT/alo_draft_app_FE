@@ -1,4 +1,5 @@
 import 'package:alo_draft_app/screens/forgot_pwd_screen.dart';
+import 'package:alo_draft_app/util/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
@@ -14,12 +15,12 @@ import 'package:alo_draft_app/screens/login_screen.dart';
 import 'package:alo_draft_app/screens/register_screen.dart';
 import 'package:alo_draft_app/screens/home_screen.dart';
 import 'package:alo_draft_app/util/custom_logger.dart';
-import 'package:alo_draft_app/services/websocket_service.dart';
+import 'package:alo_draft_app/services/socket_io_service.dart';
 
 void main() {
   // Initialize logger
   AppLogger.init(
-      'local'); // Set to 'local' for development, 'production' for release
+      env); // Set to 'local' for development, 'production' for release
 
   runApp(MyApp());
 }
@@ -78,9 +79,9 @@ class MyApp extends StatelessWidget {
               return const HomeScreen();
             }
             if (state is AuthUnauthenticated) {
-              // 🔥 CRITICAL: Disconnect WebSocket when user is unauthenticated
+              // 🔥 CRITICAL: Disconnect Socket.IO when user is unauthenticated
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                WebSocketService.instance.disconnect();
+                SocketIOService.instance.disconnect();
               });
               return const IntroScreen();
             }

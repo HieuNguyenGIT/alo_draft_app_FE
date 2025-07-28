@@ -7,7 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:alo_draft_app/blocs/message/message_bloc.dart';
 import 'package:alo_draft_app/blocs/message/message_event.dart';
 import 'package:alo_draft_app/blocs/message/message_state.dart';
-import 'package:alo_draft_app/services/websocket_service.dart';
+import 'package:alo_draft_app/services/socket_io_service.dart';
 import 'package:alo_draft_app/models/conversation_model.dart';
 import 'package:alo_draft_app/screens/user_search_screen.dart';
 import 'package:alo_draft_app/screens/chat_screen.dart';
@@ -58,23 +58,23 @@ class _MessagesScreenState extends State<MessagesScreen>
       _currentUserId = await SharedPreferencesHelper.getUserId();
       AppLogger.log('🆔 Current user ID: $_currentUserId');
 
-      // Connect to WebSocket if not connected
-      if (!WebSocketService.instance.isConnected) {
-        AppLogger.log('🔗 WebSocket not connected, connecting...');
-        await WebSocketService.instance.connect();
+      // Connect to Socket.IO if not connected
+      if (!SocketIOService.instance.isConnected) {
+        AppLogger.log('🔗 Socket.IO not connected, connecting...');
+        await SocketIOService.instance.connect();
         // Wait a bit for authentication
         await Future.delayed(const Duration(seconds: 1));
       }
 
-      // Listen for real-time messages - THIS IS THE KEY FIX
-      _messageSubscription = WebSocketService.instance.messageStream.listen(
+      // Listen for real-time messages
+      _messageSubscription = SocketIOService.instance.messageStream.listen(
         (message) {
           AppLogger.log(
               '📨 New message received in conversation list: ${message.content}');
           AppLogger.log(
               '📨 Message sender ID: ${message.senderId}, Current user: $_currentUserId');
 
-          // FIXED: Handle any new message (whether sent by us or received)
+          // Handle any new message (whether sent by us or received)
           _handleNewMessage(message);
         },
         onError: (error) {
@@ -83,7 +83,7 @@ class _MessagesScreenState extends State<MessagesScreen>
       );
 
       // Listen for typing indicators
-      _typingSubscription = WebSocketService.instance.typingStream.listen(
+      _typingSubscription = SocketIOService.instance.typingStream.listen(
         (data) {
           AppLogger.log('⌨️ Typing indicator in conversation list: $data');
           _handleTypingIndicator(data);
@@ -100,7 +100,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     }
   }
 
-  // FIXED: Handle incoming messages properly
+  // Handle incoming messages properly
   void _handleNewMessage(Message message) {
     AppLogger.log('🔄 Processing new message for conversation list update');
     AppLogger.log(
@@ -130,7 +130,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     _messageBloc.add(ConversationRefreshed());
   }
 
-  // FIXED: Find conversation ID for a message
+  // Find conversation ID for a message
   int? _findConversationIdForMessage(Message message) {
     for (var conversation in _currentConversations) {
       // Check if this message belongs to this conversation
@@ -248,7 +248,7 @@ class _MessagesScreenState extends State<MessagesScreen>
               return const Center(child: CircularProgressIndicator());
             }
             if (state is MessageLoaded) {
-              // FIXED: Update current conversations for message mapping
+              // Update current conversations for message mapping
               _currentConversations = state.conversations;
               AppLogger.log(
                   '📋 Updated conversation list with ${state.conversations.length} conversations');

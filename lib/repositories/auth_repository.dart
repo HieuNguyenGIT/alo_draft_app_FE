@@ -1,7 +1,7 @@
 import 'package:alo_draft_app/models/user_model.dart';
 import 'package:alo_draft_app/services/api_service.dart';
 import 'package:alo_draft_app/util/shared_preferences_helper.dart';
-import 'package:alo_draft_app/services/websocket_service.dart';
+import 'package:alo_draft_app/services/socket_io_service.dart';
 import 'package:alo_draft_app/util/custom_logger.dart';
 
 class AuthRepository {
@@ -40,9 +40,9 @@ class AuthRepository {
   Future<void> logout() async {
     AppLogger.log("🔄 Starting logout process...");
 
-    // 🔥 CRITICAL: Disconnect WebSocket first
-    AppLogger.log("🔌 Disconnecting WebSocket...");
-    await WebSocketService.instance.disconnect();
+    // 🔥 CRITICAL: Disconnect Socket.IO first
+    AppLogger.log("🔌 Disconnecting Socket.IO...");
+    SocketIOService.instance.disconnect();
 
     // Clear API token
     AppLogger.log("🗑️ Clearing API token...");

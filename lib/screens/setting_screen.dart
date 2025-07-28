@@ -1,8 +1,8 @@
 import 'package:alo_draft_app/blocs/auth/auth_bloc.dart';
 import 'package:alo_draft_app/blocs/auth/auth_event.dart';
 import 'package:alo_draft_app/blocs/auth/auth_state.dart';
-import 'package:alo_draft_app/screens/socket_test_screen.dart';
 import 'package:alo_draft_app/util/custom_logger.dart';
+import 'package:alo_draft_app/widgets/connection_test_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:alo_draft_app/blocs/setting/setting_bloc.dart';
@@ -148,7 +148,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-
                     // Preferences Section
                     const Text(
                       'Preferences',
@@ -243,6 +242,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         children: [
                           ListTile(
+                            leading:
+                                Icon(Icons.bug_report, color: Colors.orange),
+                            title: Text('Socket.IO Test'),
+                            subtitle: Text('Debug real-time connection'),
+                            trailing: Icon(Icons.arrow_forward_ios, size: 16),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => SocketTestScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          ListTile(
                             leading: const Icon(Icons.privacy_tip,
                                 color: Colors.blue),
                             title: const Text('Privacy Policy'),
@@ -271,24 +284,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 const SnackBar(
                                     content: Text(
                                         'Help & Support feature coming soon!')),
-                              );
-                            },
-                          ),
-                          // Add this somewhere in your settings list
-                          ListTile(
-                            leading: const Icon(Icons.compare_arrows,
-                                color: Colors.purple),
-                            title: const Text('Dual Connection Test'),
-                            subtitle:
-                                const Text('Test both Socket.IO and WebSocket'),
-                            trailing:
-                                const Icon(Icons.arrow_forward_ios, size: 16),
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const DualConnectionTestScreen(),
-                                ),
                               );
                             },
                           ),
